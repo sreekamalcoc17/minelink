@@ -295,6 +295,21 @@ public class ReliableTransport {
             log.info(">>> RECEIVED packet from {} ({} bytes)", sender, data.length);
             handlePacket(data, sender);
         }
+
+        @Override
+        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+            log.error("!!! CHANNEL EXCEPTION: {}", cause.getMessage(), cause);
+        }
+
+        @Override
+        public void channelActive(ChannelHandlerContext ctx) {
+            log.info("=== CHANNEL ACTIVE: ready to receive packets ===");
+        }
+
+        @Override
+        public void channelInactive(ChannelHandlerContext ctx) {
+            log.warn("=== CHANNEL INACTIVE: no longer receiving packets ===");
+        }
     }
 
     private void handlePacket(byte[] data, InetSocketAddress sender) {
@@ -428,6 +443,9 @@ public class ReliableTransport {
         if (channel != null && channel.isActive()) {
             ByteBuf buf = Unpooled.wrappedBuffer(data);
             channel.writeAndFlush(new DatagramPacket(buf, target));
+            log.info("<<< SENT {} bytes to {}", data.length, target);
+        } else {
+            log.warn("<<< SEND FAILED - channel not active! target={}", target);
         }
     }
 
