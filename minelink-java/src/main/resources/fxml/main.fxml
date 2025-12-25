@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.text.*?>
+<?import javafx.geometry.Insets?>
+
+<BorderPane xmlns:fx="http://javafx.com/fxml" fx:controller="com.minelink.controller.MainController"
+            styleClass="root-pane">
+    
+    <!-- Left Panel - Settings -->
+    <left>
+        <VBox styleClass="left-panel" spacing="12" prefWidth="340">
+            <padding><Insets top="25" right="25" bottom="25" left="25"/></padding>
+            
+            <!-- App Title with Icon -->
+            <HBox spacing="10" alignment="CENTER_LEFT">
+                <Text text="⛏" style="-fx-font-size: 28px;"/>
+                <VBox spacing="2">
+                    <Label text="MineLink" styleClass="app-title"/>
+                    <Label text="P2P Minecraft Tunneling" styleClass="subtitle"/>
+                </VBox>
+            </HBox>
+            
+            <Separator/>
+            
+            <!-- Mode Selection -->
+            <VBox spacing="8">
+                <Label text="⚙ Mode" styleClass="section-label"/>
+                <fx:define>
+                    <ToggleGroup fx:id="modeGroup"/>
+                </fx:define>
+                <HBox spacing="15">
+                    <RadioButton fx:id="hostRadio" text="🖥 Host (Server)" toggleGroup="$modeGroup"/>
+                    <RadioButton fx:id="clientRadio" text="🎮 Client (Join)" toggleGroup="$modeGroup" selected="true"/>
+                </HBox>
+            </VBox>
+            
+            <!-- Port Configuration -->
+            <VBox spacing="6">
+                <Label fx:id="portLabel" text="📡 Minecraft LAN Port" styleClass="section-label"/>
+                <Label fx:id="portDescription" text="Enter the port shown when you 'Open to LAN' in Minecraft" styleClass="description"/>
+                <TextField fx:id="portField" promptText="25565" text="25565" styleClass="text-field"/>
+            </VBox>
+            
+            <Separator/>
+            
+            <!-- Connection Code Section -->
+            <VBox spacing="8">
+                <Label text="🔗 My Connection Code" styleClass="section-label"/>
+                <Label text="Share this code with friends to let them connect" styleClass="description"/>
+                <TextArea fx:id="connectionCodeArea" prefRowCount="3" editable="false" wrapText="true"
+                          promptText="Click 'Start Network' to generate your code..." styleClass="code-area"/>
+                <Button fx:id="copyCodeButton" text="📋 Copy Code" onAction="#onCopyCode" 
+                        styleClass="secondary-button" maxWidth="Infinity"/>
+            </VBox>
+            
+            <Separator/>
+            
+            <!-- Add Peer Section -->
+            <VBox spacing="8">
+                <Label text="➕ Add Peer" styleClass="section-label"/>
+                <Label text="Paste a friend's connection code below" styleClass="description"/>
+                <TextField fx:id="peerCodeField" promptText="Paste connection code here..." styleClass="text-field"/>
+                <Button text="🔗 Add Peer" onAction="#onAddPeer" styleClass="secondary-button" maxWidth="Infinity"/>
+            </VBox>
+            
+            <Region VBox.vgrow="ALWAYS"/>
+            
+            <!-- Start/Stop Button -->
+            <Button fx:id="startButton" text="▶ Start Network" onAction="#onToggleNetwork"
+                    styleClass="primary-button" maxWidth="Infinity" prefHeight="50"/>
+            
+            <!-- Status -->
+            <Label fx:id="statusLabel" text="Ready" styleClass="status-label" maxWidth="Infinity" wrapText="true"/>
+        </VBox>
+    </left>
+    
+    <!-- Center - Peers List -->
+    <center>
+        <VBox styleClass="center-panel" spacing="15">
+            <padding><Insets top="25" right="25" bottom="25" left="25"/></padding>
+            
+            <HBox spacing="10" alignment="CENTER_LEFT">
+                <Text text="👥" style="-fx-font-size: 22px;"/>
+                <Label text="Connected Peers" styleClass="section-header"/>
+            </HBox>
+            
+            <ScrollPane fx:id="peersScrollPane" fitToWidth="true" VBox.vgrow="ALWAYS" styleClass="peers-scroll">
+                <VBox fx:id="peersContainer" spacing="12" styleClass="peers-container">
+                    <!-- Peer cards will be added here dynamically -->
+                </VBox>
+            </ScrollPane>
+        </VBox>
+    </center>
+    
+    <!-- Right Panel - Stats -->
+    <right>
+        <VBox styleClass="right-panel" spacing="15" prefWidth="240">
+            <padding><Insets top="25" right="25" bottom="25" left="25"/></padding>
+            
+            <HBox spacing="10" alignment="CENTER_LEFT">
+                <Text text="📊" style="-fx-font-size: 20px;"/>
+                <Label text="Network Statistics" styleClass="section-header"/>
+            </HBox>
+            
+            <VBox styleClass="stats-box" spacing="12">
+                <HBox spacing="8">
+                    <Label text="⏱" style="-fx-font-size: 14px;"/>
+                    <Label fx:id="uptimeLabel" text="Uptime: 00:00:00"/>
+                </HBox>
+                <HBox spacing="8">
+                    <Label text="👥" style="-fx-font-size: 14px;"/>
+                    <Label fx:id="peersCountLabel" text="Peers: 0"/>
+                </HBox>
+                <HBox spacing="8">
+                    <Label text="📤" style="-fx-font-size: 14px;"/>
+                    <Label fx:id="sentLabel" text="Sent: 0 KB"/>
+                </HBox>
+                <HBox spacing="8">
+                    <Label text="📥" style="-fx-font-size: 14px;"/>
+                    <Label fx:id="receivedLabel" text="Received: 0 KB"/>
+                </HBox>
+            </VBox>
+            
+            <Separator/>
+            
+            <!-- Quick Tips -->
+            <VBox spacing="8">
+                <Label text="💡 Quick Tips" styleClass="section-label"/>
+                <Label text="1. Start network to get your code" styleClass="description" wrapText="true"/>
+                <Label text="2. Share code with your friend" styleClass="description" wrapText="true"/>
+                <Label text="3. Add their code and connect" styleClass="description" wrapText="true"/>
+                <Label text="4. Use 'Copy IP' to get the Minecraft server address" styleClass="description" wrapText="true"/>
+            </VBox>
+            
+            <Region VBox.vgrow="ALWAYS"/>
+            
+            <Label text="v2.0.0" styleClass="version-label" alignment="CENTER" maxWidth="Infinity"/>
+        </VBox>
+    </right>
+    
+</BorderPane>

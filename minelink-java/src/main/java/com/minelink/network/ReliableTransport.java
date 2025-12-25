@@ -1,0 +1,458 @@
+package com.minelink.network;
+
+import com.minelink.model.Peer;
+import com.minelink.network.protocol.Packet;
+import com.minelink.network.protocol.PacketType;
+import io.netty.bootstrap.Bootstrap;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.*;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.DatagramPacket;
+import io.netty.channel.socket.nio.NioDatagramChannel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.net.InetSocketAddress;
+import java.util.Map;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+
+/**
+ * Reliable UDP transport using Netty.
+ * Provides ordered, reliable delivery with hole punching support.
+ */
+public class ReliableTransport {
+
+    private static final Logger log = LoggerFactory.getLogger(ReliableTransport.class);
+
+    private final String myPeerId;
+    private final int localPort;
+
+    private EventLoopGroup group;
+    private Channel channel;
+
+    private final Map<String, Peer> peers = new ConcurrentHashMap<>();
+    private final AtomicInteger sequenceNumber = new AtomicInteger(0);
+
+    // Pending data awaiting ACK: seq -> (peer, data, sendTime)
+    private final Map<Integer, PendingPacket> pendingAcks = new ConcurrentHashMap<>();
+
+    // Callbacks
+    private BiConsumer<String, byte[]> onDataReceived;
+    private Consumer<String> onPeerConnected;
+    private Consumer<String> onPeerDisconnected;
+
+    // Background tasks
+    private ScheduledExecutorService scheduler;
+
+    private static final int MAX_RETRIES = 10;
+    private static final int PING_INTERVAL_MS = 15000;
+    private static final int PEER_TIMEOUT_MS = 60000;
+
+    public ReliableTransport(String myPeerId, int localPort) {
+        this.myPeerId = myPeerId;
+        this.localPort = localPort;
+    }
+
+    /**
+     * Start the transport.
+     * 
+     * @return The actual local address bound to
+     */
+    public InetSocketAddress start() throws Exception {
+        group = new NioEventLoopGroup();
+
+        Bootstrap bootstrap = new Bootstrap()
+                .group(group)
+                .channel(NioDatagramChannel.class)
+                .option(ChannelOption.SO_BROADCAST, false)
+                .option(ChannelOption.SO_REUSEADDR, true)
+                .handler(new ChannelInitializer<NioDatagramChannel>() {
+                    @Override
+                    protected void initChannel(NioDatagramChannel ch) {
+                        ch.pipeline().addLast(new PacketHandler());
+                    }
+                });
+
+        channel = bootstrap.bind(localPort).sync().channel();
+
+        InetSocketAddress localAddr = (InetSocketAddress) channel.localAddress();
+        log.info("Transport started on {}", localAddr);
+
+        // Start background tasks
+        scheduler = Executors.newScheduledThreadPool(2);
+        scheduler.scheduleAtFixedRate(this::pingPeers, PING_INTERVAL_MS, PING_INTERVAL_MS, TimeUnit.MILLISECONDS);
+        scheduler.scheduleAtFixedRate(this::checkTimeouts, 5000, 5000, TimeUnit.MILLISECONDS);
+        scheduler.scheduleAtFixedRate(this::retransmitPending, 100, 100, TimeUnit.MILLISECONDS);
+
+        return localAddr;
+    }
+
+    /**
+     * Stop the transport.
+     */
+    public void stop() {
+        if (scheduler != null) {
+            scheduler.shutdown();
+        }
+        if (channel != null) {
+            channel.close();
+        }
+        if (group != null) {
+            group.shutdownGracefully();
+        }
+        peers.clear();
+        pendingAcks.clear();
+        log.info("Transport stopped");
+    }
+
+    /**
+     * Add a peer to the transport.
+     */
+    public void addPeer(String peerId, InetSocketAddress publicAddr, InetSocketAddress localAddr) {
+        Peer peer = new Peer(peerId, publicAddr, localAddr);
+        peers.put(peerId, peer);
+        log.info("Added peer: {} @ {}", peerId, publicAddr);
+    }
+
+    /**
+     * Remove a peer from the transport.
+     */
+    public void removePeer(String peerId) {
+        Peer peer = peers.remove(peerId);
+        if (peer != null) {
+            log.info("Removed peer: {}", peerId);
+            if (peer.isConnected() && onPeerDisconnected != null) {
+                onPeerDisconnected.accept(peerId);
+            }
+        }
+    }
+
+    /**
+     * Perform UDP hole punching to establish connection.
+     * Tries multiple addresses: localhost (for same machine), local IP (same
+     * network), public IP
+     * 
+     * @return true if connection established
+     */
+    public boolean punch(String peerId) {
+        Peer peer = peers.get(peerId);
+        if (peer == null) {
+            log.warn("Punch failed: peer {} not found", peerId);
+            return false;
+        }
+
+        log.info("Starting hole punch to {}", peerId);
+
+        Packet punchPacket = Packet.punch(myPeerId);
+
+        // Build list of addresses to try
+        java.util.List<InetSocketAddress> addressesToTry = new java.util.ArrayList<>();
+
+        // If peer has local address with same public IP as us, they might be on same
+        // network
+        // Try localhost first (same machine testing)
+        int peerPort = peer.getLocalAddress() != null ? peer.getLocalAddress().getPort()
+                : peer.getPublicAddress().getPort();
+        addressesToTry.add(new InetSocketAddress("127.0.0.1", peerPort));
+
+        // Try local address
+        if (peer.getLocalAddress() != null) {
+            addressesToTry.add(peer.getLocalAddress());
+        }
+
+        // Try public address
+        addressesToTry.add(peer.getPublicAddress());
+
+        for (int attempt = 1; attempt <= 15; attempt++) {
+            log.debug("Punch attempt {}/15 to {}", attempt, peerId);
+
+            // Send to all addresses
+            for (InetSocketAddress addr : addressesToTry) {
+                sendRaw(punchPacket.encode(), addr);
+            }
+
+            // Wait for response
+            try {
+                Thread.sleep(400);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+
+            if (peer.isConnected()) {
+                log.info("Hole punch successful to {}", peerId);
+                return true;
+            }
+        }
+
+        log.warn("Hole punch failed to {}", peerId);
+        return false;
+    }
+
+    /**
+     * Send data to a peer reliably.
+     */
+    public boolean send(String peerId, byte[] data) {
+        Peer peer = peers.get(peerId);
+        if (peer == null || !peer.isConnected()) {
+            log.warn("Cannot send: peer {} not connected", peerId);
+            return false;
+        }
+
+        int seq = sequenceNumber.incrementAndGet();
+        Packet packet = Packet.data(myPeerId, seq, 0, data);
+
+        // Store for retransmission
+        pendingAcks.put(seq, new PendingPacket(peerId, packet.encode(), System.currentTimeMillis(), 0));
+
+        // Send
+        sendRaw(packet.encode(), peer.getPublicAddress());
+        log.debug("Sent data seq={} to {} ({} bytes)", seq, peerId, data.length);
+
+        return true;
+    }
+
+    /**
+     * Get a peer by ID.
+     */
+    public Peer getPeer(String peerId) {
+        return peers.get(peerId);
+    }
+
+    /**
+     * Get all peers.
+     */
+    public Map<String, Peer> getPeers() {
+        return peers;
+    }
+
+    // Callbacks
+    public void setOnDataReceived(BiConsumer<String, byte[]> callback) {
+        this.onDataReceived = callback;
+    }
+
+    public void setOnPeerConnected(Consumer<String> callback) {
+        this.onPeerConnected = callback;
+    }
+
+    public void setOnPeerDisconnected(Consumer<String> callback) {
+        this.onPeerDisconnected = callback;
+    }
+
+    /**
+     * Get the local port for STUN queries.
+     */
+    public int getLocalPort() {
+        if (channel != null) {
+            InetSocketAddress addr = (InetSocketAddress) channel.localAddress();
+            return addr.getPort();
+        }
+        return 0;
+    }
+
+    // Internal packet handler
+    private class PacketHandler extends SimpleChannelInboundHandler<DatagramPacket> {
+        @Override
+        protected void channelRead0(ChannelHandlerContext ctx, DatagramPacket msg) {
+            ByteBuf buf = msg.content();
+            byte[] data = new byte[buf.readableBytes()];
+            buf.readBytes(data);
+
+            InetSocketAddress sender = msg.sender();
+            handlePacket(data, sender);
+        }
+    }
+
+    private void handlePacket(byte[] data, InetSocketAddress sender) {
+        Packet packet = Packet.decode(data);
+        if (packet == null) {
+            return;
+        }
+
+        String peerId = packet.getPeerId();
+        Peer peer = peers.get(peerId);
+
+        switch (packet.getType()) {
+            case PUNCH -> handlePunch(peerId, sender);
+            case PUNCH_ACK -> handlePunchAck(peerId, sender);
+            case PING -> handlePing(peerId, packet.getSequenceNumber(), sender);
+            case PONG -> handlePong(peerId, packet.getSequenceNumber());
+            case DATA -> handleData(peerId, packet);
+            case ACK -> handleAck(packet.getSequenceNumber());
+            case DISCONNECT -> handleDisconnect(peerId);
+        }
+    }
+
+    private void handlePunch(String peerId, InetSocketAddress sender) {
+        Peer peer = peers.get(peerId);
+        if (peer == null) {
+            log.debug("Punch from unknown peer: {}", peerId);
+            return;
+        }
+
+        // Send PUNCH_ACK
+        sendRaw(Packet.punchAck(myPeerId).encode(), sender);
+
+        if (!peer.isConnected()) {
+            peer.setConnected(true);
+            log.info("Connection established with {} (via punch)", peerId);
+            if (onPeerConnected != null) {
+                onPeerConnected.accept(peerId);
+            }
+        }
+    }
+
+    private void handlePunchAck(String peerId, InetSocketAddress sender) {
+        Peer peer = peers.get(peerId);
+        if (peer == null)
+            return;
+
+        if (!peer.isConnected()) {
+            peer.setConnected(true);
+            log.info("Connection established with {} (via punch ack)", peerId);
+            if (onPeerConnected != null) {
+                onPeerConnected.accept(peerId);
+            }
+        }
+    }
+
+    private void handlePing(String peerId, int seq, InetSocketAddress sender) {
+        Peer peer = peers.get(peerId);
+        if (peer != null) {
+            peer.updateLastSeen();
+            sendRaw(Packet.pong(myPeerId, seq).encode(), sender);
+        }
+    }
+
+    private void handlePong(String peerId, int seq) {
+        Peer peer = peers.get(peerId);
+        if (peer != null) {
+            peer.updateLastSeen();
+
+            // Calculate RTT
+            PendingPacket pending = pendingAcks.remove(-seq); // Ping uses negative seq
+            if (pending != null) {
+                double rtt = System.currentTimeMillis() - pending.sendTime;
+                peer.updateRtt(rtt);
+                log.debug("Pong from {}, RTT={:.0f}ms", peerId, rtt);
+            }
+        }
+    }
+
+    private void handleData(String peerId, Packet packet) {
+        Peer peer = peers.get(peerId);
+        if (peer != null) {
+            peer.updateLastSeen();
+
+            // Send ACK
+            sendRaw(Packet.ack(myPeerId, packet.getSequenceNumber()).encode(), peer.getPublicAddress());
+
+            // Deliver to application
+            if (onDataReceived != null) {
+                onDataReceived.accept(peerId, packet.getPayload());
+            }
+        }
+    }
+
+    private void handleAck(int seq) {
+        PendingPacket removed = pendingAcks.remove(seq);
+        if (removed != null) {
+            log.debug("ACK received for seq={}", seq);
+        }
+    }
+
+    private void handleDisconnect(String peerId) {
+        Peer peer = peers.get(peerId);
+        if (peer != null && peer.isConnected()) {
+            peer.setConnected(false);
+            log.info("Peer {} disconnected", peerId);
+            if (onPeerDisconnected != null) {
+                onPeerDisconnected.accept(peerId);
+            }
+        }
+    }
+
+    private void sendRaw(byte[] data, InetSocketAddress target) {
+        if (channel != null && channel.isActive()) {
+            ByteBuf buf = Unpooled.wrappedBuffer(data);
+            channel.writeAndFlush(new DatagramPacket(buf, target));
+        }
+    }
+
+    private void pingPeers() {
+        for (Map.Entry<String, Peer> entry : peers.entrySet()) {
+            Peer peer = entry.getValue();
+            if (peer.isConnected()) {
+                int seq = sequenceNumber.incrementAndGet();
+                Packet ping = Packet.ping(myPeerId, seq);
+
+                // Store for RTT calculation
+                pendingAcks.put(-seq, new PendingPacket(entry.getKey(), ping.encode(), System.currentTimeMillis(), 0));
+
+                sendRaw(ping.encode(), peer.getPublicAddress());
+            }
+        }
+    }
+
+    private void checkTimeouts() {
+        long now = System.currentTimeMillis();
+        for (Map.Entry<String, Peer> entry : peers.entrySet()) {
+            Peer peer = entry.getValue();
+            if (peer.isConnected() && now - peer.getLastSeen() > PEER_TIMEOUT_MS) {
+                log.warn("Peer {} timed out", entry.getKey());
+                peer.setConnected(false);
+                if (onPeerDisconnected != null) {
+                    onPeerDisconnected.accept(entry.getKey());
+                }
+            }
+        }
+    }
+
+    private void retransmitPending() {
+        long now = System.currentTimeMillis();
+
+        for (Map.Entry<Integer, PendingPacket> entry : pendingAcks.entrySet()) {
+            int seq = entry.getKey();
+            if (seq < 0)
+                continue; // Skip ping packets
+
+            PendingPacket pending = entry.getValue();
+            Peer peer = peers.get(pending.peerId);
+            if (peer == null || !peer.isConnected()) {
+                pendingAcks.remove(seq);
+                continue;
+            }
+
+            double rto = peer.getRto();
+            if (now - pending.sendTime > rto) {
+                if (pending.retries >= MAX_RETRIES) {
+                    log.warn("Max retries reached for seq={}", seq);
+                    pendingAcks.remove(seq);
+                } else {
+                    pending.retries++;
+                    pending.sendTime = now;
+                    sendRaw(pending.data, peer.getPublicAddress());
+                    log.debug("Retransmit seq={} (attempt {})", seq, pending.retries);
+                }
+            }
+        }
+    }
+
+    private static class PendingPacket {
+        final String peerId;
+        final byte[] data;
+        long sendTime;
+        int retries;
+
+        PendingPacket(String peerId, byte[] data, long sendTime, int retries) {
+            this.peerId = peerId;
+            this.data = data;
+            this.sendTime = sendTime;
+            this.retries = retries;
+        }
+    }
+}

@@ -1,0 +1,3 @@
+# MineLink Dependencies
+customtkinter>=5.2.0
+packaging>=23.0

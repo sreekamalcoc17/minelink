@@ -1,0 +1,326 @@
+/*
+ * MineLink Dark Futuristic Theme
+ * Premium design with glassmorphism and gradients
+ */
+
+/* ==================== Root & Backgrounds ==================== */
+.root {
+    -fx-font-family: 'Segoe UI', 'Roboto', sans-serif;
+}
+
+.root-pane {
+    -fx-background-color: linear-gradient(to bottom right, #0f0c29, #302b63, #24243e);
+}
+
+.left-panel {
+    -fx-background-color: rgba(15, 15, 35, 0.85);
+    -fx-background-radius: 0;
+    -fx-border-color: rgba(124, 58, 237, 0.3);
+    -fx-border-width: 0 1 0 0;
+}
+
+.right-panel {
+    -fx-background-color: rgba(15, 15, 35, 0.85);
+    -fx-background-radius: 0;
+    -fx-border-color: rgba(124, 58, 237, 0.3);
+    -fx-border-width: 0 0 0 1;
+}
+
+.center-panel {
+    -fx-background-color: transparent;
+}
+
+/* ==================== Typography ==================== */
+.app-title {
+    -fx-font-size: 32px;
+    -fx-font-weight: bold;
+    -fx-text-fill: linear-gradient(to right, #a855f7, #6366f1);
+    -fx-effect: dropshadow(gaussian, rgba(168, 85, 247, 0.4), 10, 0, 0, 0);
+}
+
+.subtitle {
+    -fx-font-size: 13px;
+    -fx-text-fill: #a0a0c0;
+    -fx-padding: 0 0 10 0;
+}
+
+.section-label {
+    -fx-font-size: 13px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #c0c0e0;
+    -fx-padding: 5 0 3 0;
+}
+
+.section-header {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #ffffff;
+    -fx-effect: dropshadow(gaussian, rgba(99, 102, 241, 0.3), 5, 0, 0, 0);
+}
+
+.description {
+    -fx-font-size: 11px;
+    -fx-text-fill: #8080a0;
+    -fx-wrap-text: true;
+}
+
+.status-label {
+    -fx-font-size: 12px;
+    -fx-text-fill: #a0a0c0;
+    -fx-alignment: center;
+    -fx-padding: 10 0 0 0;
+}
+
+.version-label {
+    -fx-font-size: 11px;
+    -fx-text-fill: #505070;
+    -fx-alignment: center;
+}
+
+/* ==================== Text Fields ==================== */
+.text-field {
+    -fx-background-color: rgba(20, 20, 45, 0.9);
+    -fx-text-fill: #ffffff;
+    -fx-prompt-text-fill: #606080;
+    -fx-border-color: rgba(99, 102, 241, 0.5);
+    -fx-border-radius: 10;
+    -fx-background-radius: 10;
+    -fx-padding: 12;
+    -fx-font-size: 13px;
+}
+
+.text-field:focused {
+    -fx-border-color: #a855f7;
+    -fx-border-width: 2;
+    -fx-effect: dropshadow(gaussian, rgba(168, 85, 247, 0.4), 10, 0, 0, 0);
+}
+
+.text-field:disabled {
+    -fx-opacity: 0.6;
+}
+
+/* ==================== Code Area (Connection Code) ==================== */
+.code-area {
+    -fx-background-color: rgba(10, 10, 25, 0.95);
+    -fx-text-fill: #22d3ee;
+    -fx-border-color: rgba(34, 211, 238, 0.4);
+    -fx-border-radius: 10;
+    -fx-background-radius: 10;
+    -fx-font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+    -fx-font-size: 11px;
+    -fx-highlight-fill: #6366f1;
+    -fx-highlight-text-fill: white;
+    -fx-padding: 10;
+}
+
+.code-area .content {
+    -fx-background-color: rgba(10, 10, 25, 0.95);
+}
+
+.code-area .scroll-pane {
+    -fx-background-color: transparent;
+}
+
+.code-area .scroll-pane .viewport {
+    -fx-background-color: transparent;
+}
+
+.code-area:focused {
+    -fx-border-color: #22d3ee;
+    -fx-effect: dropshadow(gaussian, rgba(34, 211, 238, 0.3), 8, 0, 0, 0);
+}
+
+/* Text Area styling */
+.text-area {
+    -fx-background-color: rgba(10, 10, 25, 0.95);
+    -fx-border-color: rgba(34, 211, 238, 0.4);
+    -fx-border-radius: 10;
+    -fx-background-radius: 10;
+}
+
+.text-area .content {
+    -fx-background-color: rgba(10, 10, 25, 0.95);
+}
+
+.text-area .text {
+    -fx-fill: #22d3ee;
+    -fx-font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace;
+    -fx-font-size: 11px;
+}
+
+/* ==================== Buttons ==================== */
+.primary-button {
+    -fx-background-color: linear-gradient(to right, #7c3aed, #6366f1);
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-background-radius: 12;
+    -fx-cursor: hand;
+    -fx-padding: 12 20;
+    -fx-effect: dropshadow(gaussian, rgba(124, 58, 237, 0.5), 10, 0, 0, 3);
+}
+
+.primary-button:hover {
+    -fx-background-color: linear-gradient(to right, #8b5cf6, #818cf8);
+    -fx-effect: dropshadow(gaussian, rgba(139, 92, 246, 0.6), 15, 0, 0, 5);
+}
+
+.primary-button:pressed {
+    -fx-background-color: linear-gradient(to right, #6d28d9, #4f46e5);
+}
+
+.stop-button {
+    -fx-background-color: linear-gradient(to right, #dc2626, #ef4444);
+    -fx-text-fill: #ffffff;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-background-radius: 12;
+    -fx-cursor: hand;
+    -fx-effect: dropshadow(gaussian, rgba(220, 38, 38, 0.5), 10, 0, 0, 3);
+}
+
+.stop-button:hover {
+    -fx-background-color: linear-gradient(to right, #ef4444, #f87171);
+}
+
+.secondary-button {
+    -fx-background-color: rgba(99, 102, 241, 0.2);
+    -fx-text-fill: #c0c0ff;
+    -fx-background-radius: 10;
+    -fx-border-color: rgba(99, 102, 241, 0.4);
+    -fx-border-radius: 10;
+    -fx-cursor: hand;
+    -fx-padding: 10 15;
+}
+
+.secondary-button:hover {
+    -fx-background-color: rgba(99, 102, 241, 0.4);
+    -fx-text-fill: #ffffff;
+}
+
+/* ==================== Radio Buttons ==================== */
+.radio-button {
+    -fx-text-fill: #c0c0e0;
+    -fx-font-size: 13px;
+}
+
+.radio-button>.radio {
+    -fx-background-color: rgba(20, 20, 45, 0.9);
+    -fx-border-color: rgba(99, 102, 241, 0.5);
+    -fx-border-radius: 50;
+    -fx-background-radius: 50;
+    -fx-padding: 3;
+}
+
+.radio-button:selected>.radio {
+    -fx-background-color: #7c3aed;
+    -fx-border-color: #a855f7;
+}
+
+.radio-button:selected>.radio>.dot {
+    -fx-background-color: white;
+}
+
+/* ==================== Separator ==================== */
+.separator .line {
+    -fx-border-color: rgba(99, 102, 241, 0.2);
+    -fx-border-width: 1 0 0 0;
+}
+
+/* ==================== Scroll Pane ==================== */
+.scroll-pane {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+}
+
+.scroll-pane>.viewport {
+    -fx-background-color: transparent;
+}
+
+.scroll-bar {
+    -fx-background-color: transparent;
+}
+
+.scroll-bar .thumb {
+    -fx-background-color: rgba(124, 58, 237, 0.5);
+    -fx-background-radius: 5;
+}
+
+.scroll-bar .thumb:hover {
+    -fx-background-color: rgba(124, 58, 237, 0.7);
+}
+
+.scroll-bar .increment-button,
+.scroll-bar .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.scroll-bar .increment-arrow,
+.scroll-bar .decrement-arrow {
+    -fx-shape: "";
+    -fx-padding: 0;
+}
+
+/* ==================== Stats Box ==================== */
+.stats-box {
+    -fx-background-color: rgba(20, 20, 45, 0.8);
+    -fx-background-radius: 12;
+    -fx-border-color: rgba(99, 102, 241, 0.3);
+    -fx-border-radius: 12;
+    -fx-padding: 15;
+}
+
+.stats-box .label {
+    -fx-text-fill: #a0a0c0;
+    -fx-font-size: 13px;
+}
+
+/* ==================== Peer Card ==================== */
+.peer-card {
+    -fx-background-color: linear-gradient(to right, rgba(30, 30, 60, 0.8), rgba(40, 40, 70, 0.8));
+    -fx-background-radius: 15;
+    -fx-border-color: rgba(99, 102, 241, 0.3);
+    -fx-border-radius: 15;
+    -fx-padding: 18;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.3), 10, 0, 0, 3);
+}
+
+.peer-card:hover {
+    -fx-background-color: linear-gradient(to right, rgba(40, 40, 80, 0.9), rgba(50, 50, 90, 0.9));
+    -fx-border-color: rgba(139, 92, 246, 0.5);
+    -fx-effect: dropshadow(gaussian, rgba(124, 58, 237, 0.3), 15, 0, 0, 5);
+}
+
+/* ==================== Status Colors ==================== */
+.status-success {
+    -fx-text-fill: #22c55e;
+    -fx-effect: dropshadow(gaussian, rgba(34, 197, 94, 0.3), 5, 0, 0, 0);
+}
+
+.status-warning {
+    -fx-text-fill: #f59e0b;
+}
+
+.status-error {
+    -fx-text-fill: #ef4444;
+}
+
+/* ==================== Glow Effects ==================== */
+.glow-purple {
+    -fx-effect: dropshadow(gaussian, rgba(168, 85, 247, 0.5), 15, 0, 0, 0);
+}
+
+.glow-cyan {
+    -fx-effect: dropshadow(gaussian, rgba(34, 211, 238, 0.5), 15, 0, 0, 0);
+}
+
+/* ==================== Peers Container ==================== */
+.peers-container {
+    -fx-background-color: transparent;
+    -fx-padding: 5;
+}
+
+.peers-scroll {
+    -fx-background-color: transparent;
+}
