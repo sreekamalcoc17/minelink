@@ -1,188 +1,227 @@
 /*
- * MineLink Modern Minecraft Theme
- * Aesthetic: Deepslate, Redstone, Emerald, Pixel-Perfect
+ * MineLink Premium Modern Theme (Dark Zinc)
+ * Aesthetic: Matte Black, Rounded, Minimalist, Floating
  */
 
 .root {
-    -fx-font-family: 'Consolas', 'Courier New', monospace;
+    -fx-font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', sans-serif;
     -fx-font-size: 14px;
+    /* Soft antialiasing */
+    -fx-font-smoothing-type: lcd;
 }
 
 .root-pane {
-    /* Deepslate / Obsidian Background */
-    -fx-background-color: #151521;
+    /* Zinc-950 Matte Black */
+    -fx-background-color: #09090b;
 }
 
 /* ==================== Panels ==================== */
 .sidebar-panel {
-    /* GUI Panel Grey */
-    -fx-background-color: #212121;
-    -fx-border-color: #000000;
-    -fx-border-width: 0 2 0 0;
+    /* Zinc-900 Surface */
+    -fx-background-color: #18181b;
+    -fx-background-radius: 0 16 16 0;
+    -fx-border-color: #27272a;
+    /* Zinc-800 */
+    -fx-border-width: 0 1 0 0;
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.2), 20, 0, 0, 0);
 }
 
 .glass-panel {
-    /* Not glass anymore, but distinct Minecraft Panel style */
-    -fx-background-color: rgba(30, 30, 30, 0.5);
-    -fx-border-color: #555555 #111111 #111111 #555555;
-    /* Bevel */
-    -fx-border-width: 2;
+    /* Floating Card Surface */
+    -fx-background-color: #18181b;
+    -fx-background-radius: 16;
+    -fx-border-color: #27272a;
+    -fx-border-radius: 16;
+    -fx-border-width: 1;
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.1), 10, 0, 0, 4);
 }
 
 /* ==================== Typography ==================== */
 .app-title {
-    -fx-font-size: 28px;
-    -fx-font-weight: bold;
-    -fx-text-fill: #ffffff;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.8), 0, 0, 2, 2);
-    /* Sharp shadow */
+    -fx-font-size: 24px;
+    -fx-font-weight: 700;
+    -fx-text-fill: white;
+    -fx-effect: null;
+    /* Remove blocky shadows */
 }
 
 .subtitle {
-    -fx-font-size: 10px;
-    -fx-text-fill: #AAAAAA;
+    -fx-font-size: 11px;
+    -fx-text-fill: #a1a1aa;
+    /* Zinc-400 */
+    -fx-font-weight: 500;
 }
 
 .section-label {
-    -fx-font-size: 12px;
-    -fx-font-weight: bold;
-    -fx-text-fill: #AAAAAA;
+    -fx-font-size: 11px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #71717a;
+    /* Zinc-500 */
+    -fx-text-transform: uppercase;
+    -fx-letter-spacing: 1px;
 }
 
 .header-label {
-    -fx-font-size: 20px;
-    -fx-text-fill: #E0E0E0;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.8), 0, 0, 2, 2);
+    -fx-font-size: 18px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #fafafa;
+    /* Zinc-50 */
 }
 
 .description-label {
-    -fx-text-fill: #808080;
-    -fx-font-size: 11px;
+    -fx-text-fill: #a1a1aa;
+    -fx-font-size: 12px;
 }
 
 /* ==================== Inputs ==================== */
 .text-field {
-    -fx-background-color: #000000;
-    -fx-text-fill: #ffffff;
-    -fx-prompt-text-fill: #555555;
-    -fx-border-color: #555555;
-    /* Simulates the slot border */
-    -fx-border-width: 2;
-    -fx-padding: 8;
-    -fx-background-radius: 0;
-    -fx-border-radius: 0;
+    -fx-background-color: #27272a;
+    /* Zinc-800 */
+    -fx-text-fill: white;
+    -fx-prompt-text-fill: #71717a;
+    -fx-background-radius: 8;
+    -fx-border-color: transparent;
+    -fx-padding: 10 14;
+    -fx-font-size: 13px;
+    -fx-transition: all 0.2s;
 }
 
 .text-field:focused {
-    -fx-border-color: #FFFFFF;
+    -fx-background-color: #3f3f46;
+    /* Zinc-700 */
+    -fx-border-color: #6366f1;
+    /* Indigo-500 */
+    -fx-border-radius: 8;
+    -fx-border-width: 1;
 }
 
 /* ==================== Code Box ==================== */
 .code-box {
-    -fx-background-color: #000000;
-    -fx-border-color: #5AE4E7;
-    /* Diamond Blue */
-    -fx-border-width: 2;
+    -fx-background-color: #27272a;
+    -fx-background-radius: 12;
+    -fx-border-color: #3f3f46;
+    -fx-border-radius: 12;
     -fx-cursor: hand;
+    -fx-transition: all 0.2s ease-out;
 }
 
 .code-box:hover {
-    -fx-border-color: #FFFFFF;
+    -fx-background-color: #3f3f46;
+    -fx-border-color: #6366f1;
+    -fx-scale-x: 1.01;
+    -fx-scale-y: 1.01;
 }
 
 .code-text .content {
-    -fx-fill: #5AE4E7;
+    -fx-fill: #6366f1;
+    /* Indigo */
+    -fx-font-family: 'Consolas', monospace;
     -fx-font-weight: bold;
 }
 
-/* ==================== Buttons (Minecraft Style) ==================== */
+/* ==================== Buttons ==================== */
 .button {
-    -fx-font-family: 'Consolas', 'Courier New', monospace;
-    -fx-background-radius: 0;
-    -fx-background-insets: 0;
+    -fx-font-family: 'Segoe UI', sans-serif;
+    -fx-background-radius: 8;
     -fx-cursor: hand;
-    /* Default Grey Button */
-    -fx-background-color: #3C3C3C;
-    -fx-border-color: #FFFFFF #111111 #111111 #FFFFFF;
-    /* Top/Left Light, Btm/Right Dark */
-    -fx-border-width: 2;
-    -fx-text-fill: #E0E0E0;
-    -fx-font-weight: bold;
+    -fx-font-weight: 600;
     -fx-padding: 8 16;
+    -fx-transition: all 0.2s;
 }
 
-.button:pressed {
-    -fx-background-color: #2A2A2A;
-    -fx-border-color: #111111 #FFFFFF #FFFFFF #111111;
-    /* Inverted bevel for press */
-}
-
-/* Primary (Start) = Emerald Green */
+/* Primary (Start) = Indigo Gradient */
 .primary-button {
-    -fx-background-color: #3C8527;
-    -fx-border-color: #55CC55 #1E4213 #1E4213 #55CC55;
+    -fx-background-color: linear-gradient(to right, #6366f1, #4f46e5);
     -fx-text-fill: white;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 0, 0, 2, 2);
+    -fx-border-color: transparent;
+    -fx-effect: dropshadow(three-pass-box, rgba(99, 102, 241, 0.3), 10, 0, 0, 4);
 }
 
 .primary-button:hover {
-    -fx-background-color: #4CAF35;
+    -fx-background-color: linear-gradient(to right, #818cf8, #6366f1);
+    -fx-scale-x: 1.02;
+    -fx-scale-y: 1.02;
+    -fx-effect: dropshadow(three-pass-box, rgba(99, 102, 241, 0.5), 15, 0, 0, 6);
 }
 
 .primary-button:pressed {
-    -fx-background-color: #2E661E;
-    -fx-border-color: #1E4213 #55CC55 #55CC55 #1E4213;
+    -fx-background-color: #4338ca;
+    -fx-scale-x: 0.98;
+    -fx-scale-y: 0.98;
 }
 
-/* Stop Button = Redstone */
+/* Stop Button = Rose/Red */
 .stop-button {
-    -fx-background-color: #A80000;
-    -fx-border-color: #FF5555 #550000 #550000 #FF5555;
+    -fx-background-color: #e11d48;
+    /* Rose-600 */
+    -fx-text-fill: white;
 }
 
 .stop-button:hover {
-    -fx-background-color: #CC0000;
+    -fx-background-color: #f43f5e;
 }
 
-.stop-button:pressed {
-    -fx-background-color: #770000;
-    -fx-border-color: #550000 #FF5555 #FF5555 #550000;
-}
-
-/* Secondary Button = Standard Grey */
+/* Secondary Button (Wireframe/Ghost) */
 .secondary-button {
-    /* Inherits .button default */
+    -fx-background-color: transparent;
+    -fx-text-fill: #6366f1;
+    -fx-border-color: #6366f1;
+    -fx-border-radius: 8;
 }
 
-/* ==================== Toggle Buttons ==================== */
+.secondary-button:hover {
+    -fx-background-color: rgba(99, 102, 241, 0.1);
+}
+
+/* Default Grey Button (for remove etc) */
+.button {
+    -fx-background-color: #27272a;
+    -fx-text-fill: #e4e4e7;
+}
+
+.button:hover {
+    -fx-background-color: #3f3f46;
+}
+
+/* ==================== Toggle Buttons (Segmented Control) ==================== */
+.mode-toggle-container {
+    -fx-background-color: #27272a;
+    -fx-background-radius: 10;
+    -fx-padding: 4;
+}
+
 .toggle-button {
-    -fx-background-color: #212121;
-    -fx-border-color: #555555;
-    -fx-border-width: 2;
-    -fx-text-fill: #AAAAAA;
-    -fx-background-radius: 0;
+    -fx-background-color: transparent;
+    -fx-text-fill: #a1a1aa;
+    -fx-background-radius: 8;
+    -fx-border-color: transparent;
+    -fx-font-weight: 600;
+    -fx-cursor: hand;
 }
 
 .toggle-button:selected {
-    -fx-background-color: #3C3C3C;
-    -fx-border-color: #FFFFFF;
-    -fx-text-fill: #FFFFFF;
+    -fx-background-color: #3f3f46;
+    -fx-text-fill: white;
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.2), 4, 0, 0, 2);
 }
 
 /* ==================== Peer Card ==================== */
 .peer-card {
-    -fx-background-color: #000000;
-    /* Item Slot Look */
-    -fx-border-color: #333333 #AAAAAA #AAAAAA #333333;
-    /* Inverted Bevel (Sunken) */
-    -fx-border-width: 2;
-    -fx-padding: 10;
+    -fx-background-color: #18181b;
+    -fx-background-radius: 12;
+    -fx-border-color: #27272a;
+    -fx-border-radius: 12;
+    -fx-border-width: 1;
+    -fx-padding: 16;
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.1), 5, 0, 0, 2);
+    -fx-transition: all 0.2s;
 }
 
 .peer-card:hover {
-    -fx-background-color: #111111;
-    -fx-border-color: #FFFFFF;
-    /* Highlight selection */
+    -fx-border-color: #3f3f46;
+    -fx-effect: dropshadow(three-pass-box, rgba(0, 0, 0, 0.15), 10, 0, 0, 4);
+    -fx-translate-y: -2;
+    /* Lift effect */
 }
 
 /* ==================== Scroll Pane ==================== */
@@ -191,22 +230,30 @@
     -fx-background-color: transparent;
 }
 
+.scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-pref-width: 8;
+}
+
 .scroll-bar:vertical .thumb {
-    -fx-background-color: #555555;
-    -fx-border-color: #AAAAAA #333333 #333333 #AAAAAA;
-    -fx-border-width: 1;
+    -fx-background-color: #3f3f46;
+    -fx-background-radius: 4;
+}
+
+.scroll-bar:vertical .thumb:hover {
+    -fx-background-color: #52525b;
 }
 
 /* ==================== Stats Strip ==================== */
 .stats-strip {
-    -fx-background-color: #0d0d15;
-    -fx-border-color: #333333;
-    -fx-border-width: 2 0 0 0;
-    -fx-padding: 5 15;
+    -fx-background-color: #18181b;
+    -fx-border-color: #27272a;
+    -fx-border-width: 1 0 0 0;
+    -fx-padding: 10 20;
 }
 
 .stat-item {
-    -fx-text-fill: #5AE4E7;
-    /* Diamond Blue */
-    -fx-font-family: 'Consolas';
+    -fx-text-fill: #71717a;
+    -fx-font-size: 11px;
+    -fx-font-weight: 600;
 }

@@ -273,14 +273,13 @@ public class MainController implements Initializable {
     }
 
     private VBox createPeerCard(String peerId, ConnectionInfo info, Peer peer) {
-        VBox card = new VBox(8);
+        VBox card = new VBox(12);
         card.getStyleClass().add("peer-card");
 
         // Top row: name and status
         HBox topRow = new HBox(10);
         Label nameLabel = new Label(peerId);
-        nameLabel.setStyle(
-                "-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: white; -fx-font-family: 'Consolas';");
+        nameLabel.setStyle("-fx-font-size: 15px; -fx-font-weight: bold; -fx-text-fill: white;");
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -289,11 +288,11 @@ public class MainController implements Initializable {
         boolean isConnected = peer != null && peer.isConnected();
         if (isConnected) {
             int ping = peer.getPingMs();
-            statusBadge.setText("█ ONLINE" + (ping > 0 ? " (" + ping + "ms)" : ""));
-            statusBadge.setStyle("-fx-text-fill: #55FF55; -fx-font-weight: bold;");
+            statusBadge.setText("● Online" + (ping > 0 ? " " + ping + "ms" : ""));
+            statusBadge.setStyle("-fx-text-fill: #10b981; -fx-font-weight: 600; -fx-font-size: 12px;");
         } else {
-            statusBadge.setText("○ OFFLINE");
-            statusBadge.setStyle("-fx-text-fill: #AAAAAA;");
+            statusBadge.setText("○ Offline");
+            statusBadge.setStyle("-fx-text-fill: #71717a; -fx-font-size: 12px;");
         }
 
         topRow.getChildren().addAll(nameLabel, spacer, statusBadge);
@@ -303,45 +302,46 @@ public class MainController implements Initializable {
         addrLabel.getStyleClass().add("description-label");
 
         // Buttons row
-        HBox btnRow = new HBox(10);
+        HBox btnRow = new HBox(8);
 
-        Button connectBtn = new Button(isConnected ? "CONNECTED" : "JOIN SERVER");
+        Button connectBtn = new Button(isConnected ? "Connected" : "Connect");
         connectBtn.getStyleClass().add("button");
         if (!isConnected) {
             connectBtn.getStyleClass().add("primary-button");
+        } else {
+            connectBtn.getStyleClass().add("secondary-button");
         }
         connectBtn.setDisable(isConnected);
         connectBtn.setOnAction(e -> {
             networkManager.connectToPeer(peerId);
-            connectBtn.setText("JOINING...");
+            connectBtn.setText("Connecting...");
             connectBtn.setDisable(true);
         });
 
-        Button copyBtn = new Button("COPY IP");
+        Button copyBtn = new Button("Copy IP");
         copyBtn.getStyleClass().add("button");
+        copyBtn.getStyleClass().add("secondary-button");
         copyBtn.setOnAction(e -> {
-            String addr = "localhost:25565"; // TCP bridge address
+            String addr = "localhost:25565";
             Clipboard clipboard = Clipboard.getSystemClipboard();
             ClipboardContent content = new ClipboardContent();
             content.putString(addr);
             clipboard.setContent(content);
-            copyBtn.setText("COPIED!");
+            copyBtn.setText("Copied");
             new Thread(() -> {
                 try {
                     Thread.sleep(1500);
                 } catch (InterruptedException ignored) {
                 }
-                Platform.runLater(() -> copyBtn.setText("COPY IP"));
+                Platform.runLater(() -> copyBtn.setText("Copy IP"));
             }).start();
         });
         if (!isConnected) {
             copyBtn.setVisible(false);
         }
 
-        Button removeBtn = new Button("✕");
+        Button removeBtn = new Button("Remove");
         removeBtn.getStyleClass().add("button");
-        removeBtn.getStyleClass().add("stop-button");
-        removeBtn.setStyle("-fx-min-width: 30px; -fx-padding: 5 10;");
         removeBtn.setOnAction(e -> {
             networkManager.getSavedPeers().remove(peerId);
             refreshPeerCards();
