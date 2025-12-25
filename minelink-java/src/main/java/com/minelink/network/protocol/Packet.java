@@ -71,29 +71,64 @@ public class Packet {
 
     /**
      * Decode packet from received bytes.
+     * Returns null for invalid or non-MineLink packets (like STUN responses).
      */
     public static Packet decode(byte[] data) {
+        // Minimum packet size: type(1) + peerIdLen(1) + seq(4) + streamId(2) +
+        // payloadLen(2) = 10 bytes
+        if (data == null || data.length < 10) {
+            return null;
+        }
+
         ByteBuf buf = Unpooled.wrappedBuffer(data);
         try {
             byte typeValue = buf.readByte();
             PacketType type = PacketType.fromValue(typeValue);
             if (type == null) {
+                // Not a valid MineLink packet type - could be STUN response or garbage
                 return null;
             }
 
             int peerIdLen = buf.readByte() & 0xFF;
+
+            // Validate peer ID length is reasonable (max 100 chars, and fits in remaining
+            // data)
+            // Remaining bytes after type+peerIdLen: data.length - 2
+            // We need: peerIdLen + seq(4) + streamId(2) + payloadLen(2) = peerIdLen + 8
+            if (peerIdLen > 100 || peerIdLen + 8 > data.length - 2) {
+                return null;
+            }
+
+            // Check we have enough bytes for peer ID
+            if (buf.readableBytes() < peerIdLen) {
+                return null;
+            }
+
             byte[] peerIdBytes = new byte[peerIdLen];
             buf.readBytes(peerIdBytes);
             String peerId = new String(peerIdBytes);
+
+            // Check we have enough bytes for header remainder
+            if (buf.readableBytes() < 8) {
+                return null;
+            }
 
             int sequenceNumber = buf.readInt();
             int streamId = buf.readShort() & 0xFFFF;
             int payloadLen = buf.readShort() & 0xFFFF;
 
+            // Validate payload length
+            if (payloadLen > 65535 || buf.readableBytes() < payloadLen) {
+                return null;
+            }
+
             byte[] payload = new byte[payloadLen];
             buf.readBytes(payload);
 
             return new Packet(type, peerId, sequenceNumber, streamId, payload);
+        } catch (Exception e) {
+            // Any parsing error means it's not a valid MineLink packet
+            return null;
         } finally {
             buf.release();
         }
