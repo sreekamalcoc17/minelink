@@ -159,6 +159,22 @@ public class NetworkManager {
             transport.setOnDataReceived(this::onDataReceived);
             transport.setOnPeerConnected(peerId -> {
                 status("Peer connected: " + peerId);
+
+                // AUTO-START TCP BRIDGE IN CLIENT MODE when peer connects
+                if (mode == Mode.CLIENT && tcpBridge == null) {
+                    log.info("[MC BRIDGE] Starting TCP bridge for CLIENT mode...");
+                    tcpBridge = new TcpBridge(transport, peerId, minecraftPort);
+                    if (tcpBridge.start()) {
+                        status("TCP Bridge active on localhost:" + tcpBridge.getActualPort() +
+                                " - Connect Minecraft to this address!");
+                        log.info("[MC BRIDGE] TCP Bridge listening on 127.0.0.1:{} - Minecraft can connect now!",
+                                tcpBridge.getActualPort());
+                    } else {
+                        status("Warning: TCP Bridge failed to start");
+                        log.error("[MC BRIDGE] TCP Bridge FAILED to start!");
+                    }
+                }
+
                 if (onPeerConnected != null)
                     onPeerConnected.accept(peerId);
             });
