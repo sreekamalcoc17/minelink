@@ -77,7 +77,8 @@ public class ReliableTransport {
                     }
                 });
 
-        channel = bootstrap.bind(localPort).sync().channel();
+        // Bind to IPv4 specifically to avoid IPv6/IPv4 mismatch issues
+        channel = bootstrap.bind("0.0.0.0", localPort).sync().channel();
 
         InetSocketAddress localAddr = (InetSocketAddress) channel.localAddress();
         log.info("Transport started on {}", localAddr);
@@ -291,6 +292,7 @@ public class ReliableTransport {
             buf.readBytes(data);
 
             InetSocketAddress sender = msg.sender();
+            log.info(">>> RECEIVED packet from {} ({} bytes)", sender, data.length);
             handlePacket(data, sender);
         }
     }
@@ -298,10 +300,13 @@ public class ReliableTransport {
     private void handlePacket(byte[] data, InetSocketAddress sender) {
         Packet packet = Packet.decode(data);
         if (packet == null) {
+            log.warn("Failed to decode packet from {}", sender);
             return;
         }
 
         String peerId = packet.getPeerId();
+        log.info(">>> PACKET TYPE: {} from peer: {}", packet.getType(), peerId);
+
         Peer peer = peers.get(peerId);
 
         switch (packet.getType()) {
