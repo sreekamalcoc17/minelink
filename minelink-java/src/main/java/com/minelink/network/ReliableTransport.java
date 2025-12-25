@@ -196,6 +196,7 @@ public class ReliableTransport {
 
     /**
      * Send data to a peer reliably.
+     * Large data is automatically chunked to avoid UDP fragmentation.
      */
     public boolean send(String peerId, byte[] data) {
         Peer peer = peers.get(peerId);
@@ -204,6 +205,38 @@ public class ReliableTransport {
             return false;
         }
 
+        // Safe MTU size - avoid UDP fragmentation
+        // Standard MTU is 1500, minus IP header (20), UDP header (8), our header (~30)
+        final int MAX_CHUNK_SIZE = 1200;
+
+        if (data.length <= MAX_CHUNK_SIZE) {
+            // Small data - send directly
+            return sendChunk(peer, peerId, data);
+        } else {
+            // Large data - split into chunks
+            log.info("[MC DATA] Chunking {} bytes into {} chunks for {}",
+                    data.length, (data.length + MAX_CHUNK_SIZE - 1) / MAX_CHUNK_SIZE, peerId);
+
+            int offset = 0;
+            boolean allSent = true;
+            while (offset < data.length) {
+                int chunkSize = Math.min(MAX_CHUNK_SIZE, data.length - offset);
+                byte[] chunk = new byte[chunkSize];
+                System.arraycopy(data, offset, chunk, 0, chunkSize);
+
+                if (!sendChunk(peer, peerId, chunk)) {
+                    allSent = false;
+                }
+                offset += chunkSize;
+            }
+            return allSent;
+        }
+    }
+
+    /**
+     * Send a single chunk of data.
+     */
+    private boolean sendChunk(Peer peer, String peerId, byte[] data) {
         int seq = sequenceNumber.incrementAndGet();
         Packet packet = Packet.data(myPeerId, seq, 0, data);
 
