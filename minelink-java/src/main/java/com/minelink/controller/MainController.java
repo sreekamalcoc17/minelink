@@ -35,9 +35,9 @@ public class MainController implements Initializable {
 
     // Mode selection
     @FXML
-    private RadioButton hostRadio;
+    private ToggleButton hostRadio;
     @FXML
-    private RadioButton clientRadio;
+    private ToggleButton clientRadio;
     @FXML
     private ToggleGroup modeGroup;
 
