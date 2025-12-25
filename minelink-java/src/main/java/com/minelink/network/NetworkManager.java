@@ -119,11 +119,41 @@ public class NetworkManager {
         try {
             status("Starting network...");
 
-            // Create transport
-            transport = new ReliableTransport(myPeerId, 0); // Random port
+            // STEP 1: Discover public address via STUN FIRST
+            // This creates a temporary socket, discovers the NAT mapping, then closes it
+            status("Discovering public address...");
+            StunClient.StunResult stun = StunClient.discover(5000);
+
+            int localPort;
+            String publicIp;
+            int publicPort;
+
+            if (stun != null) {
+                // Use the local port that STUN used - this gives us the NAT mapping
+                localPort = stun.localPort;
+                publicIp = stun.publicIp;
+                publicPort = stun.publicPort;
+                status("STUN discovered: " + publicIp + ":" + publicPort + " (local: " + localPort + ")");
+            } else {
+                // Fallback - use random port
+                localPort = 0;
+                publicIp = "0.0.0.0";
+                publicPort = 0;
+                status("Warning: STUN failed, using fallback");
+            }
+
+            // STEP 2: Create transport on the SAME local port STUN used
+            // This reuses the NAT mapping that STUN created
+            transport = new ReliableTransport(myPeerId, localPort);
             InetSocketAddress localAddr = transport.start();
 
-            status("Listening on " + localAddr);
+            // Update port if we used random
+            if (localPort == 0) {
+                localPort = localAddr.getPort();
+                publicPort = localPort; // Best guess without STUN
+            }
+
+            status("Listening on port " + localAddr.getPort());
 
             // Set up transport callbacks
             transport.setOnDataReceived(this::onDataReceived);
@@ -138,24 +168,12 @@ public class NetworkManager {
                     onPeerDisconnected.accept(peerId);
             });
 
-            // Discover public address via STUN using the SAME local port as transport
-            // This is CRITICAL - we need the NAT mapping for our actual transport port
-            status("Discovering public address...");
-            int transportPort = localAddr.getPort();
-            StunClient.StunResult stun = StunClient.discoverFromPort(transportPort, 5000);
+            // Create connection info with the discovered addresses
+            myConnectionInfo = new ConnectionInfo(
+                    myPeerId, publicIp, publicPort,
+                    localAddr.getAddress().getHostAddress(), localAddr.getPort());
 
-            if (stun != null) {
-                // Use the public IP from STUN, and the discovered public port
-                myConnectionInfo = new ConnectionInfo(
-                        myPeerId, stun.publicIp, stun.publicPort,
-                        localAddr.getAddress().getHostAddress(), transportPort);
-                status("Public address: " + stun.publicIp + ":" + stun.publicPort + " (local: " + transportPort + ")");
-            } else {
-                status("Warning: Could not determine public address");
-                myConnectionInfo = new ConnectionInfo(
-                        myPeerId, "0.0.0.0", transportPort,
-                        localAddr.getAddress().getHostAddress(), transportPort);
-            }
+            status("Public address: " + publicIp + ":" + publicPort);
 
             // Mode-specific setup
             if (mode == Mode.HOST) {
