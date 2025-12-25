@@ -292,7 +292,7 @@ public class ReliableTransport {
             buf.readBytes(data);
 
             InetSocketAddress sender = msg.sender();
-            log.info(">>> RECEIVED packet from {} ({} bytes)", sender, data.length);
+            log.debug(">>> RECV {} bytes from {}", data.length, sender);
             handlePacket(data, sender);
         }
 
@@ -315,7 +315,7 @@ public class ReliableTransport {
     private void handlePacket(byte[] data, InetSocketAddress sender) {
         Packet packet = Packet.decode(data);
         if (packet == null) {
-            log.warn("Failed to decode packet from {}", sender);
+            log.debug("Ignoring non-MineLink packet from {}", sender);
             return;
         }
 
@@ -443,7 +443,7 @@ public class ReliableTransport {
         if (channel != null && channel.isActive()) {
             ByteBuf buf = Unpooled.wrappedBuffer(data);
             channel.writeAndFlush(new DatagramPacket(buf, target));
-            log.info("<<< SENT {} bytes to {}", data.length, target);
+            log.debug("<<< SENT {} bytes to {}", data.length, target);
         } else {
             log.warn("<<< SEND FAILED - channel not active! target={}", target);
         }
