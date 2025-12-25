@@ -228,9 +228,11 @@ public class ReliableTransport {
             return false;
         }
 
-        // Chunk data like Python does (lines 283-320 in transport.py)
-        // Each chunk is sent as a separate packet with sequential sequence numbers
-        // Receiver's ordered delivery ensures they arrive in order
+        // Chunk data into 1200 byte segments
+        // We use TWO sequence numbers:
+        // 1. Packet Sequence (Global): For ACKs and retransmissions
+        // 2. Data Sequence (Per-Peer, in streamId): For strictly ordered delivery to
+        // the application
 
         int offset = 0;
         while (offset < data.length) {
@@ -238,10 +240,13 @@ public class ReliableTransport {
             byte[] chunk = new byte[chunkSize];
             System.arraycopy(data, offset, chunk, 0, chunkSize);
 
-            int seq = sequenceNumber.incrementAndGet();
-            Packet packet = Packet.data(myPeerId, seq, 0, chunk);
+            int transportSeq = sequenceNumber.incrementAndGet(); // Global ACK tracking
+            int dataSeq = peer.incrementAndGetSendSeq(); // Per-peer ordered stream
+
+            // Pass dataSeq as streamId
+            Packet packet = Packet.data(myPeerId, transportSeq, dataSeq, chunk);
             byte[] encoded = packet.encode();
-            pendingAcks.put(seq, new PendingPacket(peerId, encoded, System.currentTimeMillis(), 0));
+            pendingAcks.put(transportSeq, new PendingPacket(peerId, encoded, System.currentTimeMillis(), 0));
             sendRaw(encoded, peer.getPublicAddress());
 
             offset += chunkSize;
@@ -466,31 +471,32 @@ public class ReliableTransport {
             return;
 
         peer.updateLastSeen();
-        int seq = packet.getSequenceNumber();
+        int transportSeq = packet.getSequenceNumber(); // Global sequence for ACK
+        int dataSeq = packet.getStreamId(); // Per-peer sequence for ordering (was streamId)
         byte[] payload = packet.getPayload();
 
-        // Send ACK immediately
-        sendRaw(Packet.ack(myPeerId, seq).encode(), peer.getPublicAddress());
+        // Send ACK immediately for the transport sequence
+        sendRaw(Packet.ack(myPeerId, transportSeq).encode(), peer.getPublicAddress());
 
-        // ORDERED DELIVERY - like Python transport.py lines 450-481
-        // Only deliver data when sequence matches expected recv_seq
+        // ORDERED DELIVERY - Using dataSeq (streamId)
+        // Only deliver data when dataSeq matches expected recv_seq
 
         int expectedSeq = peer.getRecvSeq();
 
-        if (seq < expectedSeq) {
+        if (dataSeq < expectedSeq) {
             // Already received (duplicate), ignore
-            log.debug("Duplicate packet seq={}, expected={}", seq, expectedSeq);
+            log.debug("Duplicate packet dataSeq={}, expected={}", dataSeq, expectedSeq);
             return;
         }
 
-        if (seq > expectedSeq) {
+        if (dataSeq > expectedSeq) {
             // Out of order - buffer it for later
-            peer.getRecvBuffer().put(seq, payload);
-            log.debug("Out-of-order packet seq={}, expected={}, buffered", seq, expectedSeq);
+            peer.getRecvBuffer().put(dataSeq, payload);
+            log.debug("Out-of-order packet dataSeq={}, expected={}, buffered", dataSeq, expectedSeq);
             return;
         }
 
-        // seq == expectedSeq - in order, process it
+        // dataSeq == expectedSeq - in order, process it
         deliverData(peerId, payload);
         peer.incrementRecvSeq();
 
@@ -499,7 +505,7 @@ public class ReliableTransport {
             byte[] buffered = peer.getRecvBuffer().remove(peer.getRecvSeq());
             deliverData(peerId, buffered);
             peer.incrementRecvSeq();
-            log.debug("Delivered buffered packet seq={}", peer.getRecvSeq() - 1);
+            log.debug("Delivered buffered packet dataSeq={}", peer.getRecvSeq() - 1);
         }
     }
 
