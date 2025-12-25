@@ -227,6 +227,13 @@ public class NetworkManager {
                         info.getPeerId(),
                         new InetSocketAddress(info.getPublicIp(), info.getPublicPort()),
                         new InetSocketAddress(info.getLocalIp(), info.getLocalPort()));
+
+                // Automatically start punching when peer is added
+                // This helps establish connection when both sides add each other's codes
+                executor.submit(() -> {
+                    status("Starting auto-punch to " + info.getPeerId());
+                    startBackgroundPunching(info.getPeerId());
+                });
             }
 
             status("Added peer: " + info.getPeerId());
@@ -235,6 +242,30 @@ public class NetworkManager {
         } catch (Exception e) {
             status("Invalid connection code: " + e.getMessage());
             return false;
+        }
+    }
+
+    /**
+     * Background punching - sends punch packets periodically to help establish
+     * connection.
+     */
+    private void startBackgroundPunching(String peerId) {
+        // Send punch packets in background for 30 seconds
+        for (int i = 0; i < 30 && running; i++) {
+            if (transport != null && transport.getPeer(peerId) != null) {
+                if (transport.getPeer(peerId).isConnected()) {
+                    log.info("Background punch: {} is now connected!", peerId);
+                    return;
+                }
+                // Send punch packets to try to establish connection
+                transport.sendPunchPackets(peerId);
+            }
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
         }
     }
 

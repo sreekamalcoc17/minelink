@@ -230,6 +230,34 @@ public class ReliableTransport {
         return peers;
     }
 
+    /**
+     * Send punch packets to a peer to help establish connection.
+     * Called from background thread for continuous punching.
+     */
+    public void sendPunchPackets(String peerId) {
+        Peer peer = peers.get(peerId);
+        if (peer == null || peer.isConnected()) {
+            return;
+        }
+
+        Packet punchPacket = Packet.punch(myPeerId);
+
+        // Send to localhost (same machine)
+        int peerPort = peer.getLocalAddress() != null ? peer.getLocalAddress().getPort()
+                : peer.getPublicAddress().getPort();
+        sendRaw(punchPacket.encode(), new InetSocketAddress("127.0.0.1", peerPort));
+
+        // Send to local address
+        if (peer.getLocalAddress() != null) {
+            sendRaw(punchPacket.encode(), peer.getLocalAddress());
+        }
+
+        // Send to public address
+        sendRaw(punchPacket.encode(), peer.getPublicAddress());
+
+        log.debug("Sent punch packets to {} (public: {})", peerId, peer.getPublicAddress());
+    }
+
     // Callbacks
     public void setOnDataReceived(BiConsumer<String, byte[]> callback) {
         this.onDataReceived = callback;
@@ -294,12 +322,27 @@ public class ReliableTransport {
             return;
         }
 
-        // Send PUNCH_ACK
+        // CRITICAL: For hole punching to work across different NATs,
+        // we need to send packets back to BOTH the sender address AND the peer's public
+        // address.
+        // This opens up the NAT mapping in both directions.
+
+        // Send PUNCH_ACK back to the sender (the address where we received the punch)
         sendRaw(Packet.punchAck(myPeerId).encode(), sender);
+
+        // Also send PUNCH packets back to establish the reverse NAT mapping
+        // This is critical for symmetric NAT traversal
+        sendRaw(Packet.punch(myPeerId).encode(), sender);
+
+        // If we have a different public address for this peer, send there too
+        if (!sender.equals(peer.getPublicAddress())) {
+            sendRaw(Packet.punch(myPeerId).encode(), peer.getPublicAddress());
+            sendRaw(Packet.punchAck(myPeerId).encode(), peer.getPublicAddress());
+        }
 
         if (!peer.isConnected()) {
             peer.setConnected(true);
-            log.info("Connection established with {} (via punch)", peerId);
+            log.info("Connection established with {} (via punch from {})", peerId, sender);
             if (onPeerConnected != null) {
                 onPeerConnected.accept(peerId);
             }
