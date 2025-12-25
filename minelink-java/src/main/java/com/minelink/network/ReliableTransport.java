@@ -215,6 +215,8 @@ public class ReliableTransport {
     // Like Python: MAX_PAYLOAD_SIZE = 1200
     private static final int MAX_CHUNK_SIZE = 1200;
 
+    private static final int WINDOW_SIZE = 128; // Max packets in flight
+
     /**
      * Send data to a peer reliably.
      * Large data is chunked to avoid UDP fragmentation. Chunks are sent with
@@ -236,6 +238,22 @@ public class ReliableTransport {
 
         int offset = 0;
         while (offset < data.length) {
+            // Flow Control: Don't flood the network
+            int spinCount = 0;
+            while (pendingAcks.size() >= WINDOW_SIZE) {
+                try {
+                    Thread.sleep(1);
+                    spinCount++;
+                    if (spinCount > 5000) { // 5s timeout
+                        log.warn("Send buffer full, dropping packet to {}", peerId);
+                        return false;
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+            }
+
             int chunkSize = Math.min(MAX_CHUNK_SIZE, data.length - offset);
             byte[] chunk = new byte[chunkSize];
             System.arraycopy(data, offset, chunk, 0, chunkSize);
@@ -593,7 +611,10 @@ public class ReliableTransport {
             }
 
             double rto = peer.getRto();
-            if (now - pending.sendTime > rto) {
+            // Exponential backoff: RTO * 1.5 ^ retries
+            double backoffRto = rto * Math.pow(1.5, pending.retries);
+
+            if (now - pending.sendTime > backoffRto) {
                 if (pending.retries >= MAX_RETRIES) {
                     log.warn("Max retries reached for seq={}", seq);
                     pendingAcks.remove(seq);
@@ -601,7 +622,7 @@ public class ReliableTransport {
                     pending.retries++;
                     pending.sendTime = now;
                     sendRaw(pending.data, peer.getPublicAddress());
-                    log.debug("Retransmit seq={} (attempt {})", seq, pending.retries);
+                    log.debug("Retransmitting seq={} to {} (attempt {})", seq, pending.peerId, pending.retries);
                 }
             }
         }
