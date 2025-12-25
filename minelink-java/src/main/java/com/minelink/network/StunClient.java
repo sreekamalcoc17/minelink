@@ -67,6 +67,38 @@ public class StunClient {
     }
 
     /**
+     * Discover public address using STUN, binding to a specific local port.
+     * This is CRITICAL for NAT traversal - we need to discover the public port
+     * for the same local port that the transport is using.
+     */
+    public static StunResult discoverFromPort(int localPort, int timeout) {
+        DatagramSocket socket = null;
+        try {
+            // Create socket bound to the specific local port
+            // Using SO_REUSEADDR to allow binding even if transport is using it
+            socket = new DatagramSocket(null);
+            socket.setReuseAddress(true);
+            socket.bind(new InetSocketAddress("0.0.0.0", localPort));
+            socket.setSoTimeout(timeout);
+
+            StunResult result = discoverWithSocket(socket, timeout);
+            if (result != null) {
+                log.info("STUN discovered public mapping for local port {}: {}:{}",
+                        localPort, result.publicIp, result.publicPort);
+            }
+            return result;
+        } catch (Exception e) {
+            log.warn("STUN discovery from port {} failed: {}", localPort, e.getMessage());
+            // Fallback to regular discovery
+            return discover(timeout);
+        } finally {
+            if (socket != null && !socket.isClosed()) {
+                socket.close();
+            }
+        }
+    }
+
+    /**
      * Discover public address using STUN with an existing socket.
      */
     public static StunResult discoverWithSocket(DatagramSocket socket, int timeout) {
