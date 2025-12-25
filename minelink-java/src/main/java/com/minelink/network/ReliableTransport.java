@@ -213,7 +213,9 @@ public class ReliableTransport {
 
     /**
      * Send data to a peer reliably.
-     * Large data is automatically chunked to avoid UDP fragmentation.
+     * Note: We send full data without manual chunking. IP layer handles
+     * fragmentation
+     * and reassembly automatically, which is critical for Minecraft's protocol.
      */
     public boolean send(String peerId, byte[] data) {
         Peer peer = peers.get(peerId);
@@ -222,46 +224,15 @@ public class ReliableTransport {
             return false;
         }
 
-        // Safe MTU size - avoid UDP fragmentation
-        // Standard MTU is 1500, minus IP header (20), UDP header (8), our header (~30)
-        final int MAX_CHUNK_SIZE = 1200;
-
-        if (data.length <= MAX_CHUNK_SIZE) {
-            // Small data - send directly
-            return sendChunk(peer, peerId, data);
-        } else {
-            // Large data - split into chunks
-            log.debug("[MC DATA] Chunking {} bytes into {} chunks for {}",
-                    data.length, (data.length + MAX_CHUNK_SIZE - 1) / MAX_CHUNK_SIZE, peerId);
-
-            int offset = 0;
-            boolean allSent = true;
-            while (offset < data.length) {
-                int chunkSize = Math.min(MAX_CHUNK_SIZE, data.length - offset);
-                byte[] chunk = new byte[chunkSize];
-                System.arraycopy(data, offset, chunk, 0, chunkSize);
-
-                if (!sendChunk(peer, peerId, chunk)) {
-                    allSent = false;
-                }
-                offset += chunkSize;
-            }
-            return allSent;
-        }
-    }
-
-    /**
-     * Send a single chunk of data.
-     */
-    private boolean sendChunk(Peer peer, String peerId, byte[] data) {
         int seq = sequenceNumber.incrementAndGet();
         Packet packet = Packet.data(myPeerId, seq, 0, data);
 
         // Store for retransmission
-        pendingAcks.put(seq, new PendingPacket(peerId, packet.encode(), System.currentTimeMillis(), 0));
+        byte[] encoded = packet.encode();
+        pendingAcks.put(seq, new PendingPacket(peerId, encoded, System.currentTimeMillis(), 0));
 
-        // Send
-        sendRaw(packet.encode(), peer.getPublicAddress());
+        // Send - UDP/IP layer handles fragmentation if needed
+        sendRaw(encoded, peer.getPublicAddress());
         log.debug("Sent data seq={} to {} ({} bytes)", seq, peerId, data.length);
 
         return true;
