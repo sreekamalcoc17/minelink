@@ -275,12 +275,12 @@ public class MainController implements Initializable {
     private VBox createPeerCard(String peerId, ConnectionInfo info, Peer peer) {
         VBox card = new VBox(8);
         card.getStyleClass().add("peer-card");
-        card.setPadding(new Insets(15));
 
         // Top row: name and status
         HBox topRow = new HBox(10);
-        Label nameLabel = new Label("👤 " + peerId);
-        nameLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: white;");
+        Label nameLabel = new Label(peerId);
+        nameLabel.setStyle(
+                "-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: white; -fx-font-family: 'Consolas';");
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -289,46 +289,49 @@ public class MainController implements Initializable {
         boolean isConnected = peer != null && peer.isConnected();
         if (isConnected) {
             int ping = peer.getPingMs();
-            statusBadge.setText("● Connected" + (ping > 0 ? " (" + ping + "ms)" : ""));
-            statusBadge.setStyle("-fx-text-fill: #22c55e;");
+            statusBadge.setText("█ ONLINE" + (ping > 0 ? " (" + ping + "ms)" : ""));
+            statusBadge.setStyle("-fx-text-fill: #55FF55; -fx-font-weight: bold;");
         } else {
-            statusBadge.setText("○ Not Connected");
-            statusBadge.setStyle("-fx-text-fill: #8b8b8b;");
+            statusBadge.setText("○ OFFLINE");
+            statusBadge.setStyle("-fx-text-fill: #AAAAAA;");
         }
 
         topRow.getChildren().addAll(nameLabel, spacer, statusBadge);
 
         // Address info
         Label addrLabel = new Label(info.getPublicIp() + ":" + info.getPublicPort());
-        addrLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #8b8b8b;");
+        addrLabel.getStyleClass().add("description-label");
 
         // Buttons row
         HBox btnRow = new HBox(10);
 
-        Button connectBtn = new Button(isConnected ? "✓ Connected" : "Connect");
-        connectBtn.setStyle("-fx-background-color: #7c3aed; -fx-text-fill: white; -fx-background-radius: 8;");
+        Button connectBtn = new Button(isConnected ? "CONNECTED" : "JOIN SERVER");
+        connectBtn.getStyleClass().add("button");
+        if (!isConnected) {
+            connectBtn.getStyleClass().add("primary-button");
+        }
         connectBtn.setDisable(isConnected);
         connectBtn.setOnAction(e -> {
             networkManager.connectToPeer(peerId);
-            connectBtn.setText("Connecting...");
+            connectBtn.setText("JOINING...");
             connectBtn.setDisable(true);
         });
 
-        Button copyBtn = new Button("📋 Copy IP");
-        copyBtn.setStyle("-fx-background-color: #2d2d4a; -fx-text-fill: white; -fx-background-radius: 8;");
+        Button copyBtn = new Button("COPY IP");
+        copyBtn.getStyleClass().add("button");
         copyBtn.setOnAction(e -> {
             String addr = "localhost:25565"; // TCP bridge address
             Clipboard clipboard = Clipboard.getSystemClipboard();
             ClipboardContent content = new ClipboardContent();
             content.putString(addr);
             clipboard.setContent(content);
-            copyBtn.setText("✓ Copied!");
+            copyBtn.setText("COPIED!");
             new Thread(() -> {
                 try {
                     Thread.sleep(1500);
                 } catch (InterruptedException ignored) {
                 }
-                Platform.runLater(() -> copyBtn.setText("📋 Copy IP"));
+                Platform.runLater(() -> copyBtn.setText("COPY IP"));
             }).start();
         });
         if (!isConnected) {
@@ -336,7 +339,9 @@ public class MainController implements Initializable {
         }
 
         Button removeBtn = new Button("✕");
-        removeBtn.setStyle("-fx-background-color: #2d2d4a; -fx-text-fill: white; -fx-background-radius: 8;");
+        removeBtn.getStyleClass().add("button");
+        removeBtn.getStyleClass().add("stop-button");
+        removeBtn.setStyle("-fx-min-width: 30px; -fx-padding: 5 10;");
         removeBtn.setOnAction(e -> {
             networkManager.getSavedPeers().remove(peerId);
             refreshPeerCards();
