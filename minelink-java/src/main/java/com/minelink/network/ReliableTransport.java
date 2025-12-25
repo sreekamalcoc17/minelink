@@ -150,7 +150,7 @@ public class ReliableTransport {
 
         Packet punchPacket = Packet.punch(myPeerId);
 
-        // Build list of addresses to try
+        // Build list of addresses to try (including port prediction for symmetric NAT)
         java.util.List<InetSocketAddress> addressesToTry = new java.util.ArrayList<>();
 
         // If peer has local address with same public IP as us, they might be on same
@@ -168,8 +168,25 @@ public class ReliableTransport {
         // Try public address
         addressesToTry.add(peer.getPublicAddress());
 
-        for (int attempt = 1; attempt <= 15; attempt++) {
-            log.debug("Punch attempt {}/15 to {}", attempt, peerId);
+        // PORT PREDICTION for symmetric NAT
+        // The STUN-discovered port might differ from the actual port used for this
+        // connection
+        // Try nearby ports (+/- 10) to handle sequential port allocation
+        String publicIp = peer.getPublicAddress().getAddress().getHostAddress();
+        int basePort = peer.getPublicAddress().getPort();
+        for (int delta = -10; delta <= 10; delta++) {
+            if (delta == 0)
+                continue; // Already added
+            int predictedPort = basePort + delta;
+            if (predictedPort > 0 && predictedPort < 65536) {
+                addressesToTry.add(new InetSocketAddress(publicIp, predictedPort));
+            }
+        }
+
+        log.info("Will try {} addresses for hole punch to {}", addressesToTry.size(), peerId);
+
+        for (int attempt = 1; attempt <= 20; attempt++) { // Increased attempts
+            log.debug("Punch attempt {}/20 to {}", attempt, peerId);
 
             // Send to all addresses
             for (InetSocketAddress addr : addressesToTry) {
@@ -178,7 +195,7 @@ public class ReliableTransport {
 
             // Wait for response
             try {
-                Thread.sleep(400);
+                Thread.sleep(300); // Slightly faster
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return false;
@@ -275,19 +292,32 @@ public class ReliableTransport {
         }
 
         Packet punchPacket = Packet.punch(myPeerId);
+        byte[] punchData = punchPacket.encode();
 
         // Send to localhost (same machine)
         int peerPort = peer.getLocalAddress() != null ? peer.getLocalAddress().getPort()
                 : peer.getPublicAddress().getPort();
-        sendRaw(punchPacket.encode(), new InetSocketAddress("127.0.0.1", peerPort));
+        sendRaw(punchData, new InetSocketAddress("127.0.0.1", peerPort));
 
         // Send to local address
         if (peer.getLocalAddress() != null) {
-            sendRaw(punchPacket.encode(), peer.getLocalAddress());
+            sendRaw(punchData, peer.getLocalAddress());
         }
 
         // Send to public address
-        sendRaw(punchPacket.encode(), peer.getPublicAddress());
+        sendRaw(punchData, peer.getPublicAddress());
+
+        // PORT PREDICTION for symmetric NAT - also try nearby ports
+        String publicIp = peer.getPublicAddress().getAddress().getHostAddress();
+        int basePort = peer.getPublicAddress().getPort();
+        for (int delta = -5; delta <= 5; delta++) {
+            if (delta == 0)
+                continue;
+            int predictedPort = basePort + delta;
+            if (predictedPort > 0 && predictedPort < 65536) {
+                sendRaw(punchData, new InetSocketAddress(publicIp, predictedPort));
+            }
+        }
 
         log.debug("Sent punch packets to {} (public: {})", peerId, peer.getPublicAddress());
     }
