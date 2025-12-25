@@ -355,7 +355,8 @@ public class ReliableTransport {
             buf.readBytes(data);
 
             InetSocketAddress sender = msg.sender();
-            log.debug(">>> RECV {} bytes from {}", data.length, sender);
+            // Use trace level to avoid flooding logs
+            log.trace(">>> RECV {} bytes from {}", data.length, sender);
             handlePacket(data, sender);
         }
 
@@ -378,16 +379,23 @@ public class ReliableTransport {
     private void handlePacket(byte[] data, InetSocketAddress sender) {
         Packet packet = Packet.decode(data);
         if (packet == null) {
-            log.debug("Ignoring non-MineLink packet from {}", sender);
+            log.trace("Ignoring non-MineLink packet from {}", sender);
             return;
         }
 
         String peerId = packet.getPeerId();
-        log.info(">>> PACKET TYPE: {} from peer: {}", packet.getType(), peerId);
+        PacketType type = packet.getType();
+
+        // Only log non-repetitive packet types at higher levels
+        if (type == PacketType.DATA || type == PacketType.DISCONNECT) {
+            log.debug(">>> PACKET TYPE: {} from peer: {}", type, peerId);
+        } else {
+            log.trace(">>> PACKET TYPE: {} from peer: {}", type, peerId);
+        }
 
         Peer peer = peers.get(peerId);
 
-        switch (packet.getType()) {
+        switch (type) {
             case PUNCH -> handlePunch(peerId, sender);
             case PUNCH_ACK -> handlePunchAck(peerId, sender);
             case PING -> handlePing(peerId, packet.getSequenceNumber(), sender);
@@ -506,7 +514,9 @@ public class ReliableTransport {
         if (channel != null && channel.isActive()) {
             ByteBuf buf = Unpooled.wrappedBuffer(data);
             channel.writeAndFlush(new DatagramPacket(buf, target));
-            log.debug("<<< SENT {} bytes to {}", data.length, target);
+            // Use trace level to avoid flooding logs - only visible with
+            // -Dlogback.configurationFile with TRACE level
+            log.trace("<<< SENT {} bytes to {}", data.length, target);
         } else {
             log.warn("<<< SEND FAILED - channel not active! target={}", target);
         }
