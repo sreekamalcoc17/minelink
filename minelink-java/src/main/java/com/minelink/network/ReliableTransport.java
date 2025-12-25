@@ -211,16 +211,15 @@ public class ReliableTransport {
         return false;
     }
 
-    // Message ID counter for fragmentation
-    private final AtomicInteger messageIdCounter = new AtomicInteger(0);
-
     // Safe chunk size - must fit in UDP datagram without IP fragmentation
+    // Like Python: MAX_PAYLOAD_SIZE = 1200
     private static final int MAX_CHUNK_SIZE = 1200;
 
     /**
      * Send data to a peer reliably.
      * Large data is chunked to avoid UDP fragmentation. Chunks are sent with
-     * sequential sequence numbers to ensure ordered delivery.
+     * sequential sequence numbers - ordered delivery ensures receiver gets them in
+     * order.
      */
     public boolean send(String peerId, byte[] data) {
         Peer peer = peers.get(peerId);
@@ -229,42 +228,18 @@ public class ReliableTransport {
             return false;
         }
 
-        if (data.length <= MAX_CHUNK_SIZE) {
-            // Small data - send directly with streamId=0 (not fragmented)
-            int seq = sequenceNumber.incrementAndGet();
-            Packet packet = Packet.data(myPeerId, seq, 0, data);
-            byte[] encoded = packet.encode();
-            pendingAcks.put(seq, new PendingPacket(peerId, encoded, System.currentTimeMillis(), 0));
-            sendRaw(encoded, peer.getPublicAddress());
-            log.debug("Sent data seq={} to {} ({} bytes)", seq, peerId, data.length);
-            return true;
-        }
-
-        // Large data - chunk it
-        // Use messageId in streamId field (high 8 bits) and chunk index (low 8 bits)
-        int messageId = messageIdCounter.incrementAndGet() & 0xFF;
-        int numChunks = (data.length + MAX_CHUNK_SIZE - 1) / MAX_CHUNK_SIZE;
-
-        log.debug("Chunking {} bytes into {} chunks (msgId={})", data.length, numChunks, messageId);
+        // Chunk data like Python does (lines 283-320 in transport.py)
+        // Each chunk is sent as a separate packet with sequential sequence numbers
+        // Receiver's ordered delivery ensures they arrive in order
 
         int offset = 0;
-        for (int chunkIndex = 0; chunkIndex < numChunks; chunkIndex++) {
-            int chunkSize = Math.min(MAX_CHUNK_SIZE - 4, data.length - offset); // Reserve 4 bytes for header
-            byte[] chunk = new byte[chunkSize + 4];
-
-            // Chunk header: [totalChunks(1), chunkIndex(1), totalLen high(1), totalLen
-            // low(1)]
-            chunk[0] = (byte) numChunks;
-            chunk[1] = (byte) chunkIndex;
-            chunk[2] = (byte) ((data.length >> 8) & 0xFF);
-            chunk[3] = (byte) (data.length & 0xFF);
-            System.arraycopy(data, offset, chunk, 4, chunkSize);
+        while (offset < data.length) {
+            int chunkSize = Math.min(MAX_CHUNK_SIZE, data.length - offset);
+            byte[] chunk = new byte[chunkSize];
+            System.arraycopy(data, offset, chunk, 0, chunkSize);
 
             int seq = sequenceNumber.incrementAndGet();
-            // StreamId encodes: messageId (high byte) | marker 0x80 (indicates fragmented)
-            int streamId = (messageId << 8) | 0x80 | (chunkIndex & 0x7F);
-
-            Packet packet = Packet.data(myPeerId, seq, streamId, chunk);
+            Packet packet = Packet.data(myPeerId, seq, 0, chunk);
             byte[] encoded = packet.encode();
             pendingAcks.put(seq, new PendingPacket(peerId, encoded, System.currentTimeMillis(), 0));
             sendRaw(encoded, peer.getPublicAddress());
@@ -272,6 +247,8 @@ public class ReliableTransport {
             offset += chunkSize;
         }
 
+        log.debug("Sent {} bytes to {} ({} chunks)", data.length, peerId,
+                (data.length + MAX_CHUNK_SIZE - 1) / MAX_CHUNK_SIZE);
         return true;
     }
 
@@ -401,8 +378,6 @@ public class ReliableTransport {
             log.trace(">>> PACKET TYPE: {} from peer: {}", type, peerId);
         }
 
-        Peer peer = peers.get(peerId);
-
         switch (type) {
             case PUNCH -> handlePunch(peerId, sender);
             case PUNCH_ACK -> handlePunchAck(peerId, sender);
@@ -485,103 +460,55 @@ public class ReliableTransport {
         }
     }
 
-    // Reassembly buffer: key = "peerId:messageId", value = chunks and metadata
-    private final Map<String, ReassemblyBuffer> reassemblyBuffers = new ConcurrentHashMap<>();
-
-    private static class ReassemblyBuffer {
-        final int totalChunks;
-        final int totalLength;
-        final byte[][] chunks;
-        int receivedCount = 0;
-        long createTime = System.currentTimeMillis();
-
-        ReassemblyBuffer(int totalChunks, int totalLength) {
-            this.totalChunks = totalChunks;
-            this.totalLength = totalLength;
-            this.chunks = new byte[totalChunks][];
-        }
-
-        boolean addChunk(int index, byte[] data) {
-            if (index >= 0 && index < totalChunks && chunks[index] == null) {
-                chunks[index] = data;
-                receivedCount++;
-                return true;
-            }
-            return false;
-        }
-
-        boolean isComplete() {
-            return receivedCount >= totalChunks;
-        }
-
-        byte[] reassemble() {
-            byte[] result = new byte[totalLength];
-            int offset = 0;
-            for (byte[] chunk : chunks) {
-                if (chunk != null && offset + chunk.length <= totalLength) {
-                    System.arraycopy(chunk, 0, result, offset, chunk.length);
-                    offset += chunk.length;
-                }
-            }
-            return result;
-        }
-    }
-
     private void handleData(String peerId, Packet packet) {
         Peer peer = peers.get(peerId);
         if (peer == null)
             return;
 
         peer.updateLastSeen();
-
-        // Send ACK immediately
-        sendRaw(Packet.ack(myPeerId, packet.getSequenceNumber()).encode(), peer.getPublicAddress());
-
-        int streamId = packet.getStreamId();
+        int seq = packet.getSequenceNumber();
         byte[] payload = packet.getPayload();
 
-        // Check if this is a fragmented packet (streamId has 0x80 flag)
-        if (streamId == 0) {
-            // Not fragmented - deliver directly
-            if (onDataReceived != null) {
-                onDataReceived.accept(peerId, payload);
-            }
-        } else if ((streamId & 0x80) != 0) {
-            // Fragmented packet - reassemble
-            int messageId = (streamId >> 8) & 0xFF;
-            int chunkIndex = streamId & 0x7F;
+        // Send ACK immediately
+        sendRaw(Packet.ack(myPeerId, seq).encode(), peer.getPublicAddress());
 
-            if (payload.length < 4) {
-                log.warn("Invalid fragment: payload too small");
-                return;
-            }
+        // ORDERED DELIVERY - like Python transport.py lines 450-481
+        // Only deliver data when sequence matches expected recv_seq
 
-            // Parse chunk header
-            int totalChunks = payload[0] & 0xFF;
-            int expectedIndex = payload[1] & 0xFF;
-            int totalLength = ((payload[2] & 0xFF) << 8) | (payload[3] & 0xFF);
+        int expectedSeq = peer.getRecvSeq();
 
-            // Extract chunk data
-            byte[] chunkData = new byte[payload.length - 4];
-            System.arraycopy(payload, 4, chunkData, 0, chunkData.length);
+        if (seq < expectedSeq) {
+            // Already received (duplicate), ignore
+            log.debug("Duplicate packet seq={}, expected={}", seq, expectedSeq);
+            return;
+        }
 
-            String bufferKey = peerId + ":" + messageId;
-            ReassemblyBuffer buffer = reassemblyBuffers.computeIfAbsent(bufferKey,
-                    k -> new ReassemblyBuffer(totalChunks, totalLength));
+        if (seq > expectedSeq) {
+            // Out of order - buffer it for later
+            peer.getRecvBuffer().put(seq, payload);
+            log.debug("Out-of-order packet seq={}, expected={}, buffered", seq, expectedSeq);
+            return;
+        }
 
-            buffer.addChunk(chunkIndex, chunkData);
-            log.debug("Fragment {}/{} of msg {} from {} ({} bytes)",
-                    chunkIndex + 1, totalChunks, messageId, peerId, chunkData.length);
+        // seq == expectedSeq - in order, process it
+        deliverData(peerId, payload);
+        peer.incrementRecvSeq();
 
-            if (buffer.isComplete()) {
-                byte[] reassembled = buffer.reassemble();
-                reassemblyBuffers.remove(bufferKey);
-                log.debug("Reassembled message {} from {} ({} bytes)", messageId, peerId, reassembled.length);
+        // Check buffer for next expected packets (drain in order)
+        while (peer.getRecvBuffer().containsKey(peer.getRecvSeq())) {
+            byte[] buffered = peer.getRecvBuffer().remove(peer.getRecvSeq());
+            deliverData(peerId, buffered);
+            peer.incrementRecvSeq();
+            log.debug("Delivered buffered packet seq={}", peer.getRecvSeq() - 1);
+        }
+    }
 
-                if (onDataReceived != null) {
-                    onDataReceived.accept(peerId, reassembled);
-                }
-            }
+    /**
+     * Deliver data to the application callback.
+     */
+    private void deliverData(String peerId, byte[] data) {
+        if (onDataReceived != null) {
+            onDataReceived.accept(peerId, data);
         }
     }
 

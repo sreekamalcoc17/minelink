@@ -1,6 +1,8 @@
 package com.minelink.model;
 
 import java.net.InetSocketAddress;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Represents a peer in the P2P network.
@@ -16,6 +18,10 @@ public class Peer {
     private volatile double srtt; // Smoothed RTT in milliseconds
     private volatile double rttVar;
     private volatile double rto; // Retransmission timeout
+
+    // Ordered receive tracking
+    private volatile int recvSeq = 0; // Next expected sequence number
+    private final Map<Integer, byte[]> recvBuffer = new ConcurrentHashMap<>(); // Out-of-order packets
 
     private static final double DEFAULT_RTT = 1000.0; // 1 second default
     private static final double MIN_RTO = 200.0;
@@ -97,6 +103,19 @@ public class Peer {
             return -1;
         }
         return (int) Math.round(srtt);
+    }
+
+    // Ordered receive tracking methods
+    public int getRecvSeq() {
+        return recvSeq;
+    }
+
+    public void incrementRecvSeq() {
+        recvSeq++;
+    }
+
+    public Map<Integer, byte[]> getRecvBuffer() {
+        return recvBuffer;
     }
 
     @Override
