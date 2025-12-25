@@ -370,16 +370,16 @@ public class NetworkManager {
      * Handle data received from a peer.
      */
     private void onDataReceived(String peerId, byte[] data) {
-        log.info("[MC DATA] Received {} bytes from peer {} over P2P", data.length, peerId);
+        log.debug("[MC DATA] Received {} bytes from peer {} over P2P", data.length, peerId);
 
         if (mode == Mode.HOST) {
             // Forward to Minecraft server
-            log.info("[MC DATA] HOST mode - forwarding to Minecraft server on port {}", minecraftPort);
+            log.debug("[MC DATA] HOST mode - forwarding to Minecraft server on port {}", minecraftPort);
             forwardToMinecraft(data);
         } else {
             // Forward to TCP bridge (Minecraft client)
             if (tcpBridge != null) {
-                log.info("[MC DATA] CLIENT mode - forwarding to TCP bridge for Minecraft client");
+                log.debug("[MC DATA] CLIENT mode - forwarding to TCP bridge for Minecraft client");
                 tcpBridge.receiveData(data);
             } else {
                 log.warn("[MC DATA] CLIENT mode - TCP bridge is NULL! Cannot forward data");

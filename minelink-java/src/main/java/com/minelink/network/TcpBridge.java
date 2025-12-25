@@ -134,7 +134,7 @@ public class TcpBridge {
      * Receive data from the P2P transport and forward to Minecraft clients.
      */
     public void receiveData(byte[] data) {
-        log.info("[MC BRIDGE] Received {} bytes from P2P to forward to Minecraft client", data.length);
+        log.debug("[MC BRIDGE] Received {} bytes from P2P to forward to Minecraft client", data.length);
 
         if (clients.isEmpty()) {
             log.warn("[MC BRIDGE] No Minecraft clients connected to receive data! Connect Minecraft to localhost:{}",
@@ -150,7 +150,7 @@ public class TcpBridge {
             if (client.isActive()) {
                 client.writeAndFlush(buf.retainedDuplicate());
                 clientsForwarded++;
-                log.info("[MC BRIDGE] Forwarded {} bytes to Minecraft client {}", data.length, entry.getKey());
+                log.debug("[MC BRIDGE] Forwarded {} bytes to Minecraft client {}", data.length, entry.getKey());
             }
         }
 

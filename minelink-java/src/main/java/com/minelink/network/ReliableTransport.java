@@ -231,7 +231,7 @@ public class ReliableTransport {
             return sendChunk(peer, peerId, data);
         } else {
             // Large data - split into chunks
-            log.info("[MC DATA] Chunking {} bytes into {} chunks for {}",
+            log.debug("[MC DATA] Chunking {} bytes into {} chunks for {}",
                     data.length, (data.length + MAX_CHUNK_SIZE - 1) / MAX_CHUNK_SIZE, peerId);
 
             int offset = 0;

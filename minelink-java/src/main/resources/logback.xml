@@ -23,6 +23,6 @@
     </root>
     
     <!-- Package-specific levels -->
-    <logger name="com.minelink" level="DEBUG"/>
+    <logger name="com.minelink" level="INFO"/>
     <logger name="io.netty" level="WARN"/>
 </configuration>
