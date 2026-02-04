@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.text.*?>
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.shape.*?>
+
+<StackPane xmlns:fx="http://javafx.com/fxml" fx:controller="com.minelink.controller.MainController"
+           styleClass="root-pane">
+           
+    <!-- Main Content Container -->
+    <VBox spacing="0" alignment="TOP_CENTER">
+        
+        <!-- HEADER -->
+        <HBox alignment="CENTER" spacing="20" style="-fx-padding: 30 30 20 30;">
+            <VBox alignment="CENTER" spacing="4">
+                <Label text="MineLink" styleClass="app-title"/>
+                <Label text="Quantum Tunnel" styleClass="subtitle"/>
+            </VBox>
+        </HBox>
+
+        <!-- DASHBOARD GRID -->
+        <HBox spacing="24" VBox.vgrow="ALWAYS" style="-fx-padding: 0 24 24 24;">
+            
+            <!-- LEFT PANEL: CONFIGURATION -->
+            <VBox spacing="28" prefWidth="340" styleClass="sidebar-panel">
+                <padding><Insets top="28" right="28" bottom="28" left="28"/></padding>
+                
+                <!-- MODE SWITCH -->
+                <VBox spacing="12">
+                    <Label text="Network Mode" styleClass="section-label"/>
+                    <fx:define>
+                        <ToggleGroup fx:id="modeGroup"/>
+                    </fx:define>
+                    <HBox spacing="0" styleClass="mode-toggle-container">
+                        <ToggleButton fx:id="hostRadio" text="Host" toggleGroup="$modeGroup" 
+                                      maxWidth="Infinity" HBox.hgrow="ALWAYS" styleClass="toggle-button"/>
+                        <ToggleButton fx:id="clientRadio" text="Join" toggleGroup="$modeGroup" selected="true"
+                                      maxWidth="Infinity" HBox.hgrow="ALWAYS" styleClass="toggle-button"/>
+                    </HBox>
+                </VBox>
+                
+                <!-- PORT CONFIG -->
+                <VBox spacing="10" fx:id="portBox">
+                    <Label fx:id="portLabel" text="LAN Port" styleClass="section-label"/>
+                    <TextField fx:id="portField" promptText="25565" text="25565" styleClass="text-field"/>
+                    <Label fx:id="portDescription" text="Port from Open to LAN screen" styleClass="description-label"/>
+                </VBox>
+
+                <Region VBox.vgrow="ALWAYS"/>
+
+                <!-- CONNECTION CODE (IDENTITY) -->
+                <VBox spacing="12">
+                    <Label text="Your Connection Code" styleClass="section-label"/>
+                    
+                    <!-- Clickable Code Box -->
+                    <StackPane styleClass="code-box" onMouseClicked="#onCopyCode">
+                         <padding><Insets top="20" right="20" bottom="20" left="20"/></padding>
+                         <VBox spacing="8" alignment="CENTER">
+                             <TextArea fx:id="connectionCodeArea" editable="false" wrapText="true" 
+                                       prefRowCount="2" styleClass="code-text" 
+                                       style="-fx-background-color: transparent; -fx-padding: 0; -fx-alignment: center;"/>
+                             <Button fx:id="copyCodeButton" text="Tap to Copy" onAction="#onCopyCode"
+                                     style="-fx-background-color: transparent; -fx-text-fill: #636366; -fx-font-size: 11px; -fx-cursor: hand; -fx-padding: 0;"/>
+                         </VBox>
+                    </StackPane>
+                </VBox>
+                
+                <!-- MAIN ACTION -->
+                <Button fx:id="startButton" text="Start Network" onAction="#onToggleNetwork"
+                        styleClass="primary-button" maxWidth="Infinity" prefHeight="52"/>
+                        
+            </VBox>
+
+            <!-- RIGHT PANEL: PEERS -->
+            <VBox spacing="24" HBox.hgrow="ALWAYS" styleClass="glass-panel">
+                <padding><Insets top="28" right="28" bottom="28" left="28"/></padding>
+                
+                <!-- Header -->
+                <HBox alignment="CENTER_LEFT" spacing="12">
+                    <Label text="Friends" styleClass="header-label"/>
+                    <Region HBox.hgrow="ALWAYS"/>
+                    <HBox spacing="6" alignment="CENTER" style="-fx-background-color: #2c2c2e; -fx-background-radius: 8; -fx-padding: 6 12;">
+                        <Label fx:id="peersCountLabel" text="0 Online" style="-fx-text-fill: #30d158; -fx-font-size: 12px; -fx-font-weight: 600;"/>
+                    </HBox>
+                </HBox>
+                
+                <!-- ADD PEER -->
+                <HBox spacing="12" alignment="CENTER_LEFT">
+                    <TextField fx:id="peerCodeField" promptText="Paste friend's connection code" 
+                               HBox.hgrow="ALWAYS" styleClass="text-field"/>
+                    <Button text="Add" onAction="#onAddPeer" styleClass="primary-button" style="-fx-padding: 12 24;"/>
+                </HBox>
+
+                <!-- PEERS LIST -->
+                <ScrollPane fx:id="peersScrollPane" fitToWidth="true" VBox.vgrow="ALWAYS" styleClass="scroll-pane">
+                    <VBox fx:id="peersContainer" spacing="12" styleClass="peers-container">
+                        <!-- Dynamic Peer Cards -->
+                    </VBox>
+                </ScrollPane>
+            </VBox>
+        </HBox>
+        
+        <!-- FOOTER STATS -->
+        <HBox spacing="32" styleClass="stats-strip" alignment="CENTER">
+             <HBox spacing="8" alignment="CENTER_LEFT">
+                 <Label fx:id="statusLabel" text="Ready" styleClass="stat-item"/>
+             </HBox>
+             <Region HBox.hgrow="ALWAYS"/>
+             <HBox spacing="6" alignment="CENTER_LEFT">
+                 <Label text="⏱" style="-fx-text-fill: #636366;"/>
+                 <Label fx:id="uptimeLabel" text="00:00:00" styleClass="stat-item"/>
+             </HBox>
+             <HBox spacing="6" alignment="CENTER_LEFT">
+                 <Label text="↑" style="-fx-text-fill: #30d158;"/>
+                 <Label fx:id="sentLabel" text="0 KB" styleClass="stat-item"/>
+             </HBox>
+             <HBox spacing="6" alignment="CENTER_LEFT">
+                 <Label text="↓" style="-fx-text-fill: #0a84ff;"/>
+                 <Label fx:id="receivedLabel" text="0 KB" styleClass="stat-item"/>
+             </HBox>
+        </HBox>
+    </VBox>
+</StackPane>
