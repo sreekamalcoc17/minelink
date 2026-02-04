@@ -194,12 +194,9 @@ public class TcpBridge {
         public void channelInactive(ChannelHandlerContext ctx) {
             log.info("[TcpBridge] Minecraft client {} disconnected", clientId);
             clients.remove(clientId);
-
-            // Signal peer explicitly
-            if (transport != null) {
-                log.info("[TcpBridge] Signaling disconnect to peer {}", peerId);
-                transport.disconnectPeer(peerId);
-            }
+            // NOTE: Do NOT disconnect the P2P peer here!
+            // Minecraft closes TCP connections frequently (e.g., server list ping).
+            // The P2P tunnel should stay alive for the next connection.
         }
 
         @Override
