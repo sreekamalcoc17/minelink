@@ -1,0 +1,18 @@
+# Gradle
+.gradle/
+build/
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+bin/
+
+# Logs
+logs/
+*.log
+
+# Python
+__pycache__/
+*.spec
+dist/
