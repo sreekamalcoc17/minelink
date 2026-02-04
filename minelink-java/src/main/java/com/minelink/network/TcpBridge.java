@@ -194,6 +194,12 @@ public class TcpBridge {
         public void channelInactive(ChannelHandlerContext ctx) {
             log.info("[TcpBridge] Minecraft client {} disconnected", clientId);
             clients.remove(clientId);
+
+            // Signal peer explicitly
+            if (transport != null) {
+                log.info("[TcpBridge] Signaling disconnect to peer {}", peerId);
+                transport.disconnectPeer(peerId);
+            }
         }
 
         @Override

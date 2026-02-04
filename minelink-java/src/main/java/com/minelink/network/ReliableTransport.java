@@ -133,6 +133,26 @@ public class ReliableTransport {
     }
 
     /**
+     * Send disconnect packet and remove peer.
+     */
+    public void disconnectPeer(String peerId) {
+        Peer peer = peers.get(peerId);
+        if (peer != null) {
+            log.info("Sending disconnect to {}", peerId);
+            // Send DISCONNECT packet best-effort (multiple times to be safe)
+            Packet pkt = new Packet(PacketType.DISCONNECT, myPeerId, 0, 0, new byte[0]);
+            byte[] data = pkt.encode();
+            for (int i = 0; i < 3; i++) {
+                sendRaw(data, peer.getPublicAddress());
+                if (peer.getLocalAddress() != null) {
+                    sendRaw(data, peer.getLocalAddress());
+                }
+            }
+            removePeer(peerId);
+        }
+    }
+
+    /**
      * Perform UDP hole punching to establish connection.
      * Tries multiple addresses: localhost (for same machine), local IP (same
      * network), public IP
@@ -215,7 +235,7 @@ public class ReliableTransport {
     // Like Python: MAX_PAYLOAD_SIZE = 1200
     private static final int MAX_CHUNK_SIZE = 1200;
 
-    private static final int WINDOW_SIZE = 128; // Max packets in flight
+    private static final int WINDOW_SIZE = 1024; // Increased for modded Minecraft (1.2MB buffer)
 
     /**
      * Send data to a peer reliably.
@@ -238,15 +258,16 @@ public class ReliableTransport {
 
         int offset = 0;
         while (offset < data.length) {
-            // Flow Control: Don't flood the network
+            // Flow Control: Block until window opens
+            // Modded Minecraft sends bursts of data, so we must not drop it.
+            // We wait indefinitely for the window to clear.
             int spinCount = 0;
             while (pendingAcks.size() >= WINDOW_SIZE) {
                 try {
-                    Thread.sleep(1);
+                    Thread.sleep(2);
                     spinCount++;
-                    if (spinCount > 5000) { // 5s timeout
-                        log.warn("Send buffer full, dropping packet to {}", peerId);
-                        return false;
+                    if (spinCount % 5000 == 0) { // Log every 10s
+                        log.warn("Send buffer full ({} packets), waiting to send to {}...", pendingAcks.size(), peerId);
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -616,8 +637,14 @@ public class ReliableTransport {
 
             if (now - pending.sendTime > backoffRto) {
                 if (pending.retries >= MAX_RETRIES) {
-                    log.warn("Max retries reached for seq={}", seq);
-                    pendingAcks.remove(seq);
+                    if (pending.retries % 10 == 0) {
+                        log.warn("Packet seq={} to {} is struggling ({} retries), link quality poor? RTO={}",
+                                seq, pending.peerId, pending.retries, backoffRto);
+                    }
+                    // Keep trying, don't drop
+                    pending.retries++;
+                    pending.sendTime = now;
+                    sendRaw(pending.data, peer.getPublicAddress());
                 } else {
                     pending.retries++;
                     pending.sendTime = now;

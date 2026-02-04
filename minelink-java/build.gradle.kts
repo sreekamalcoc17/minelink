@@ -1,16 +1,17 @@
 plugins {
     id("java")
     id("application")
-    id("org.openjfx.javafxplugin") version "0.1.0"
+    id("org.openjfx.javafxplugin") version "0.0.14"
 }
 
 group = "com.minelink"
 version = "2.0.0"
 
 java {
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(21))
-    }
+    // Toolchain can cause issues if not found/downloadable. Use local Java.
+    // toolchain {
+    //     languageVersion.set(JavaLanguageVersion.of(21))
+    // }
 }
 
 repositories {

@@ -180,6 +180,19 @@ public class NetworkManager {
             });
             transport.setOnPeerDisconnected(peerId -> {
                 status("Peer disconnected: " + peerId);
+
+                // CRITICAL: Reset Minecraft connection to ensure clean state for next session
+                if (mode == Mode.HOST && minecraftChannel != null) {
+                    log.info("Closing Minecraft server connection (session reset)");
+                    try {
+                        minecraftChannel.close();
+                    } catch (Exception e) {
+                        log.warn("Error closing MC channel", e);
+                    }
+                    minecraftChannel = null;
+                    minecraftConnected = false;
+                }
+
                 if (onPeerDisconnected != null)
                     onPeerDisconnected.accept(peerId);
             });
