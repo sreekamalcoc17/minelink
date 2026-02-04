@@ -49,8 +49,8 @@ public class ReliableTransport {
     private ScheduledExecutorService scheduler;
 
     private static final int MAX_RETRIES = 10;
-    private static final int PING_INTERVAL_MS = 15000;
-    private static final int PEER_TIMEOUT_MS = 60000;
+    private static final int PING_INTERVAL_MS = 5000; // Aggressive: 5s for Double NAT
+    private static final int PEER_TIMEOUT_MS = 30000; // 30s timeout
 
     public ReliableTransport(String myPeerId, int localPort) {
         this.myPeerId = myPeerId;
@@ -593,11 +593,18 @@ public class ReliableTransport {
             if (peer.isConnected()) {
                 int seq = sequenceNumber.incrementAndGet();
                 Packet ping = Packet.ping(myPeerId, seq);
+                byte[] pingData = ping.encode();
 
                 // Store for RTT calculation
-                pendingAcks.put(-seq, new PendingPacket(entry.getKey(), ping.encode(), System.currentTimeMillis(), 0));
+                pendingAcks.put(-seq, new PendingPacket(entry.getKey(), pingData, System.currentTimeMillis(), 0));
 
-                sendRaw(ping.encode(), peer.getPublicAddress());
+                // Send to PUBLIC address (for Double NAT, this keeps outer NAT alive)
+                sendRaw(pingData, peer.getPublicAddress());
+
+                // Also send to LOCAL address if different (keeps both paths alive)
+                if (peer.getLocalAddress() != null && !peer.getLocalAddress().equals(peer.getPublicAddress())) {
+                    sendRaw(pingData, peer.getLocalAddress());
+                }
             }
         }
     }
