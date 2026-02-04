@@ -371,6 +371,13 @@ class NetworkManager:
                 if not data:
                     logger.info("[NetworkManager] Minecraft server closed connection (recv returned empty bytes)")
                     self._mc_connected = False
+                    # Send FIN to peers
+                    if self.transport:
+                        from .protocol import DataPayload
+                        with self.transport._lock:
+                            connected_peers = [pid for pid, p in self.transport.peers.items() if p.connected]
+                        for peer_id in connected_peers:
+                            self.transport.send(peer_id, 0, b'', DataPayload.FLAG_FIN)
                     break
                 
                 total_bytes_forwarded += len(data)
@@ -570,10 +577,32 @@ class NetworkManager:
                 if peer.connected
             ]
     
-    def _on_data_received(self, peer_id: str, stream_id: int, data: bytes):
+    def _on_data_received(self, peer_id: str, stream_id: int, data: bytes, flags: int = 0):
         """Handle data received from a peer."""
         logger.info(f"[NetworkManager] Received {len(data)} bytes from peer {peer_id} (stream {stream_id})")
         
+        # Check for FIN flag (stream closed)
+        from .protocol import DataPayload
+        if flags & DataPayload.FLAG_FIN:
+            logger.info(f"[NetworkManager] Received FIN from {peer_id}")
+            if self.mode == NetworkMode.HOST:
+                # Close connection to Minecraft server to reset state
+                if self._mc_socket:
+                    logger.info("[NetworkManager] Closing Minecraft server connection (resetting state)")
+                    try:
+                        self._mc_socket.close()
+                    except:
+                        pass
+                    self._mc_socket = None
+                    self._mc_connected = False
+            else:
+                # Client mode: Close local TCP bridge clients
+                if self.tcp_bridge:
+                    # We can't easily close specific clients with current arch, 
+                    # but usually client mode initiates the close.
+                    pass
+            return
+
         if self.mode == NetworkMode.HOST:
             # Forward to Minecraft server
             # Connect on-demand if needed

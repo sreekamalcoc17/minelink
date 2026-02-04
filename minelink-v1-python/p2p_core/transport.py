@@ -112,7 +112,7 @@ class ReliableTransport:
     def __init__(
         self,
         local_port: int = 0,
-        on_data: Optional[Callable[[str, int, bytes], None]] = None,
+        on_data: Optional[Callable[[str, int, bytes, int], None]] = None,
         on_connect: Optional[Callable[[str], None]] = None,
         on_disconnect: Optional[Callable[[str], None]] = None
     ):
@@ -262,7 +262,7 @@ class ReliableTransport:
         
         return peer.connected
     
-    def send(self, peer_id: str, stream_id: int, data: bytes) -> bool:
+    def send(self, peer_id: str, stream_id: int, data: bytes, flags: int = 0) -> bool:
         """
         Send reliable data to a peer.
         
@@ -296,14 +296,19 @@ class ReliableTransport:
                 seq = peer.next_seq()
                 flags = 0
                 if len(fragments) > 1:
-                    flags |= DataPayload.FLAG_FRAGMENT
+                    pass # Don't overwrite caller flags if passed
+                
+                # Combine fragmentation flags with caller flags
+                packet_flags = flags
+                if len(fragments) > 1:
+                    packet_flags |= DataPayload.FLAG_FRAGMENT
                 
                 packet_data = create_data_packet(
                     session_id=self.session_id,
                     sequence=seq,
                     stream_id=stream_id,
                     data=chunk,
-                    flags=flags
+                    flags=packet_flags
                 )
                 
                 # Add to pending for retransmission
@@ -462,7 +467,7 @@ class ReliableTransport:
             data_payload = DataPayload.unpack(packet.payload)
             
             if self.on_data:
-                self.on_data(peer.peer_id, data_payload.stream_id, data_payload.data)
+                self.on_data(peer.peer_id, data_payload.stream_id, data_payload.data, data_payload.flags)
             
             peer.recv_seq += 1
             
@@ -475,7 +480,8 @@ class ReliableTransport:
                     self.on_data(
                         peer.peer_id,
                         buffered_payload.stream_id,
-                        buffered_payload.data
+                        buffered_payload.data,
+                        buffered_payload.flags
                     )
                 
                 peer.recv_seq += 1
@@ -704,6 +710,9 @@ class TCPBridge:
                     data = client_sock.recv(4096)
                     if not data:
                         logger.info(f"[TCP Bridge] Client {client_id} closed connection (no data)")
+                        # Send FIN
+                        from .protocol import DataPayload
+                        self.transport.send(self.peer_id, self.stream_id, b'', DataPayload.FLAG_FIN)
                         break
                     
                     total_bytes_sent += len(data)
