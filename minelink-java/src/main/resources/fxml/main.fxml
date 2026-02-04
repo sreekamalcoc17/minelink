@@ -47,6 +47,18 @@
                     <TextField fx:id="portField" promptText="25565" text="25565" styleClass="text-field"/>
                     <Label fx:id="portDescription" text="Port from Open to LAN screen" styleClass="description-label"/>
                 </VBox>
+                
+                <!-- SHARED FOLDER (Auto-Sync) -->
+                <VBox spacing="10">
+                    <Label text="Shared Folder (Auto-Sync)" styleClass="section-label"/>
+                    <HBox spacing="8" alignment="CENTER_LEFT">
+                        <TextField fx:id="sharedFolderField" promptText="Path to shared folder..." 
+                                   HBox.hgrow="ALWAYS" styleClass="text-field"/>
+                        <Button fx:id="browseFolderBtn" text="📁" onAction="#onBrowseFolder"
+                                style="-fx-background-color: #3a3a3c; -fx-text-fill: white; -fx-padding: 8 12;"/>
+                    </HBox>
+                    <Label text="Optional: Google Drive folder for auto-reconnect" styleClass="description-label"/>
+                </VBox>
 
                 <Region VBox.vgrow="ALWAYS"/>
 

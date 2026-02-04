@@ -17,6 +17,7 @@ import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
@@ -59,11 +60,16 @@ public class MainController implements Initializable {
     @FXML
     private TextField peerCodeField;
 
-    // Controls
     @FXML
     private Button startButton;
     @FXML
     private Label statusLabel;
+
+    // Shared folder sync
+    @FXML
+    private TextField sharedFolderField;
+    @FXML
+    private Button browseFolderBtn;
 
     // Peers
     @FXML
@@ -104,6 +110,12 @@ public class MainController implements Initializable {
         networkManager.setOnStatusChange(this::updateStatus);
         networkManager.setOnPeerConnected(this::onPeerConnected);
         networkManager.setOnPeerDisconnected(this::onPeerDisconnected);
+
+        // Load saved shared folder path
+        String savedPath = System.getProperty("minelink.sharedFolder", "");
+        if (!savedPath.isEmpty()) {
+            sharedFolderField.setText(savedPath);
+        }
 
         // Initial state
         updateStatus("Ready - Select mode and start network");
@@ -176,6 +188,12 @@ public class MainController implements Initializable {
                     startTime = System.currentTimeMillis();
                     startStatsUpdater();
 
+                    // Enable shared folder sync if configured
+                    String sharedPath = sharedFolderField.getText().trim();
+                    if (!sharedPath.isEmpty()) {
+                        networkManager.enableSharedFolderSync(sharedPath);
+                    }
+
                     // Add any saved peers
                     refreshPeerCards();
                 } else {
@@ -232,6 +250,22 @@ public class MainController implements Initializable {
     }
 
     @FXML
+    private void onBrowseFolder() {
+        javafx.stage.DirectoryChooser chooser = new javafx.stage.DirectoryChooser();
+        chooser.setTitle("Select Shared Folder (e.g., Google Drive)");
+
+        File selected = chooser.showDialog(startButton.getScene().getWindow());
+        if (selected != null) {
+            sharedFolderField.setText(selected.getAbsolutePath());
+
+            // Enable sync immediately if network is running
+            if (networkManager.getMyConnectionInfo() != null) {
+                networkManager.enableSharedFolderSync(selected.getAbsolutePath());
+            }
+        }
+    }
+
+    @FXML
     private void onAddPeer() {
         String code = peerCodeField.getText().trim();
         if (code.isEmpty()) {
@@ -279,7 +313,7 @@ public class MainController implements Initializable {
         // Top row: name and status
         HBox topRow = new HBox(12);
         topRow.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
-        
+
         // Name with clean styling
         Label nameLabel = new Label(peerId);
         nameLabel.setStyle("-fx-font-size: 16px; -fx-font-weight: 600; -fx-text-fill: #ffffff;");
@@ -350,7 +384,8 @@ public class MainController implements Initializable {
         HBox.setHgrow(btnSpacer, Priority.ALWAYS);
 
         Button removeBtn = new Button("✕");
-        removeBtn.setStyle("-fx-font-size: 14px; -fx-padding: 6 12; -fx-background-color: transparent; -fx-text-fill: #636366;");
+        removeBtn.setStyle(
+                "-fx-font-size: 14px; -fx-padding: 6 12; -fx-background-color: transparent; -fx-text-fill: #636366;");
         removeBtn.setOnAction(e -> {
             networkManager.getSavedPeers().remove(peerId);
             refreshPeerCards();

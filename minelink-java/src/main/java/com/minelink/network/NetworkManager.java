@@ -36,6 +36,7 @@ public class NetworkManager {
 
     private ReliableTransport transport;
     private TcpBridge tcpBridge;
+    private SharedFolderSync sharedFolderSync;
 
     // For HOST mode: connection to Minecraft server
     private Channel minecraftChannel;
@@ -104,6 +105,48 @@ public class NetworkManager {
         if (onStatusChange != null) {
             onStatusChange.accept(msg);
         }
+    }
+
+    /**
+     * Enable shared folder sync for automatic peer discovery.
+     * 
+     * @param folderPath Path to the shared folder (e.g., Google Drive folder)
+     * @return true if sync started successfully
+     */
+    public boolean enableSharedFolderSync(String folderPath) {
+        if (sharedFolderSync != null) {
+            sharedFolderSync.stop();
+        }
+
+        sharedFolderSync = new SharedFolderSync(myPeerId);
+        sharedFolderSync.setOnPeerCodeDiscovered(code -> {
+            // When a peer's code is discovered, add them automatically
+            log.info("Auto-discovered peer from shared folder");
+            if (addPeer(code)) {
+                status("Auto-connected to peer from shared folder!");
+            }
+        });
+
+        boolean success = sharedFolderSync.start(folderPath);
+        if (success) {
+            status("Shared folder sync enabled: " + folderPath);
+
+            // If already running, update our info immediately
+            if (running && myConnectionInfo != null) {
+                sharedFolderSync.updateMyInfo(getConnectionCode());
+            }
+        }
+        return success;
+    }
+
+    /**
+     * Get the shared folder path if sync is enabled.
+     */
+    public String getSharedFolderPath() {
+        if (sharedFolderSync != null && sharedFolderSync.getSharedFolder() != null) {
+            return sharedFolderSync.getSharedFolder().getAbsolutePath();
+        }
+        return null;
     }
 
     /**
@@ -214,6 +257,12 @@ public class NetworkManager {
 
             running = true;
             status("Network started!");
+
+            // If shared folder sync is configured, update our info
+            if (sharedFolderSync != null) {
+                sharedFolderSync.updateMyInfo(getConnectionCode());
+            }
+
             return true;
 
         } catch (Exception e) {
@@ -243,6 +292,11 @@ public class NetworkManager {
         if (minecraftGroup != null) {
             minecraftGroup.shutdownGracefully();
             minecraftGroup = null;
+        }
+
+        if (sharedFolderSync != null) {
+            sharedFolderSync.stop();
+            sharedFolderSync = null;
         }
 
         if (transport != null) {
