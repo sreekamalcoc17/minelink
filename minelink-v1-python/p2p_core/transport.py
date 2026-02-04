@@ -543,13 +543,18 @@ class ReliableTransport:
                     for seq, pending in list(peer.pending.items()):
                         if now - pending.send_time > peer.rto:
                             if pending.retries >= MAX_RETRIES:
-                                # Give up
-                                del peer.pending[seq]
-                                peer.packets_lost += 1
-                                logger.warning(
-                                    f"Packet {seq} to {peer_id} lost after "
-                                    f"{MAX_RETRIES} retries"
-                                )
+                                # Don't give up! This is a TCP tunnel, we CANNOT drop packets.
+                                # Just log a warning and keep trying, but back off slightly more?
+                                # Actually, just cap the RTO (which is already done) and keep going.
+                                if pending.retries % 10 == 0:
+                                    logger.warning(
+                                        f"Packet {seq} to {peer_id} requires {pending.retries} retries "
+                                        f"(Link quality poor?) - RTO={peer.rto:.2f}"
+                                    )
+                                # Continue retransmitting
+                                pending.retries += 1
+                                pending.send_time = now
+                                self._send_raw(pending.data, peer.public_addr)
                             else:
                                 # Retransmit
                                 pending.retries += 1
