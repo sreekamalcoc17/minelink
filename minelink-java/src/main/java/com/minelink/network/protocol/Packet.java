@@ -48,20 +48,11 @@ public class Packet {
     /**
      * Encode packet to bytes for transmission.
      */
-    private static final byte[] MAGIC = new byte[] { 'M', 'L' };
-    private static final byte VERSION = 2;
-
-    /**
-     * Encode packet to bytes for transmission.
-     */
     public byte[] encode() {
         byte[] peerIdBytes = peerId.getBytes();
 
         ByteBuf buf = Unpooled.buffer();
         try {
-            // Header: MAGIC(2) + VER(1) + TYPE(1) + ID_LEN(1) + ...
-            buf.writeBytes(MAGIC);
-            buf.writeByte(VERSION);
             buf.writeByte(type.getValue());
             buf.writeByte(peerIdBytes.length);
             buf.writeBytes(peerIdBytes);
@@ -80,42 +71,36 @@ public class Packet {
 
     /**
      * Decode packet from received bytes.
-     * Returns null for invalid or non-MineLink packets.
+     * Returns null for invalid or non-MineLink packets (like STUN responses).
      */
     public static Packet decode(byte[] data) {
-        // Minimum packet size: MAGIC(2) + VER(1) + TYPE(1) + IDLEN(1) + SEQ(4) +
-        // STREAM(2) + LEN(2) = 13 bytes
-        if (data == null || data.length < 13) {
-            return null; // Too short
+        // Minimum packet size: type(1) + peerIdLen(1) + seq(4) + streamId(2) +
+        // payloadLen(2) = 10 bytes
+        if (data == null || data.length < 10) {
+            return null;
         }
 
         ByteBuf buf = Unpooled.wrappedBuffer(data);
         try {
-            // 1. Verify Magic
-            byte m1 = buf.readByte();
-            byte m2 = buf.readByte();
-            if (m1 != MAGIC[0] || m2 != MAGIC[1]) {
-                return null; // Invalid magic (noise/garbage)
-            }
-
-            // 2. Verify Version
-            byte ver = buf.readByte();
-            if (ver != VERSION) {
-                return null; // Version mismatch
-            }
-
             byte typeValue = buf.readByte();
             PacketType type = PacketType.fromValue(typeValue);
             if (type == null) {
+                // Not a valid MineLink packet type - could be STUN response or garbage
                 return null;
             }
 
             int peerIdLen = buf.readByte() & 0xFF;
 
-            // Header size so far: 2+1+1+1 = 5 bytes
-            // Remaining fixed: SEQ(4)+STREAM(2)+LEN(2) = 8
-            // Check peerID length sanity
-            if (peerIdLen > 100 || peerIdLen + 8 > buf.readableBytes()) {
+            // Validate peer ID length is reasonable (max 100 chars, and fits in remaining
+            // data)
+            // Remaining bytes after type+peerIdLen: data.length - 2
+            // We need: peerIdLen + seq(4) + streamId(2) + payloadLen(2) = peerIdLen + 8
+            if (peerIdLen > 100 || peerIdLen + 8 > data.length - 2) {
+                return null;
+            }
+
+            // Check we have enough bytes for peer ID
+            if (buf.readableBytes() < peerIdLen) {
                 return null;
             }
 
@@ -123,6 +108,7 @@ public class Packet {
             buf.readBytes(peerIdBytes);
             String peerId = new String(peerIdBytes);
 
+            // Check we have enough bytes for header remainder
             if (buf.readableBytes() < 8) {
                 return null;
             }
@@ -131,6 +117,7 @@ public class Packet {
             int streamId = buf.readShort() & 0xFFFF;
             int payloadLen = buf.readShort() & 0xFFFF;
 
+            // Validate payload length
             if (payloadLen > 65535 || buf.readableBytes() < payloadLen) {
                 return null;
             }
@@ -140,6 +127,7 @@ public class Packet {
 
             return new Packet(type, peerId, sequenceNumber, streamId, payload);
         } catch (Exception e) {
+            // Any parsing error means it's not a valid MineLink packet
             return null;
         } finally {
             buf.release();
