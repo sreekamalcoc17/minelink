@@ -54,10 +54,20 @@
                     <HBox spacing="8" alignment="CENTER_LEFT">
                         <TextField fx:id="sharedFolderField" promptText="Select Google Drive folder..." 
                                    HBox.hgrow="ALWAYS" styleClass="text-field"/>
-                        <Button fx:id="browseFolderBtn" text="Browse" onAction="#onBrowseFolder"
-                                styleClass="secondary-button"/>
-                        <Button fx:id="refreshBtn" text="Refresh" onAction="#onManualRefresh"
-                                style="-fx-background-color: #0a84ff; -fx-text-fill: white; -fx-background-radius: 8; -fx-padding: 8 16; -fx-font-weight: bold;"/>
+                        <Button fx:id="browseFolderBtn" onAction="#onBrowseFolder" styleClass="icon-button">
+                            <tooltip><Tooltip text="Select Shared Folder"/></tooltip>
+                            <graphic>
+                                <SVGPath content="M20 6h-8l-2-2H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm0 12H4V8h16v10z" 
+                                         fill="#a1a1aa" scaleX="0.9" scaleY="0.9"/>
+                            </graphic>
+                        </Button>
+                        <Button fx:id="refreshBtn" onAction="#onManualRefresh" styleClass="icon-button">
+                            <tooltip><Tooltip text="Force Refresh"/></tooltip>
+                            <graphic>
+                                <SVGPath content="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" 
+                                         fill="#0a84ff" scaleX="0.9" scaleY="0.9"/>
+                            </graphic>
+                        </Button>
                     </HBox>
                     <Label fx:id="syncStatusLabel" text="Not syncing" 
                            style="-fx-text-fill: #30d158; -fx-font-size: 11px; -fx-font-weight: 600;"/>

@@ -347,3 +347,22 @@
 .text-area .scroll-pane .viewport {
     -fx-background-color: transparent;
 }
+
+/* ==================== Icon Buttons ==================== */
+.icon-button {
+    -fx-background-color: transparent;
+    -fx-padding: 8;
+    -fx-border-color: transparent;
+    -fx-cursor: hand;
+    -fx-min-width: 36px;
+    -fx-min-height: 36px;
+}
+
+.icon-button:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.1);
+    -fx-background-radius: 8;
+}
+
+.icon-button:pressed {
+    -fx-background-color: rgba(255, 255, 255, 0.2);
+}
