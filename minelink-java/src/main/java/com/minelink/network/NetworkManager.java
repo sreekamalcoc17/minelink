@@ -118,25 +118,107 @@ public class NetworkManager {
             sharedFolderSync.stop();
         }
 
-        sharedFolderSync = new SharedFolderSync(myPeerId);
+        // Create sync with HOST/CLIENT role
+        boolean isHost = (mode == Mode.HOST);
+        sharedFolderSync = new SharedFolderSync(myPeerId, isHost);
+
+        // Callback: When a peer's connection code is discovered
         sharedFolderSync.setOnPeerCodeDiscovered(code -> {
-            // When a peer's code is discovered, add them automatically
             log.info("Auto-discovered peer from shared folder");
             if (addPeer(code)) {
                 status("Auto-connected to peer from shared folder!");
             }
         });
 
+        // Callback: When we need to refresh (re-STUN)
+        sharedFolderSync.setOnRefreshNeeded(oldCode -> {
+            log.info("Re-STUN triggered by shared folder sync");
+            refreshConnection();
+        });
+
+        // Callback: Status updates for UI
+        sharedFolderSync.setOnStatusUpdate((type, message) -> {
+            log.debug("Sync status: [{}] {}", type, message);
+            if ("error".equals(type)) {
+                status("Sync error: " + message);
+            }
+        });
+
         boolean success = sharedFolderSync.start(folderPath);
         if (success) {
-            status("Shared folder sync enabled: " + folderPath);
+            status("Shared folder sync enabled: " + sharedFolderSync.getDesktopName());
 
-            // If already running, update our info immediately
+            // If already running, publish our info immediately
             if (running && myConnectionInfo != null) {
-                sharedFolderSync.updateMyInfo(getConnectionCode());
+                sharedFolderSync.updateMyInfo(
+                        getConnectionCode(),
+                        myConnectionInfo.getPublicIp(),
+                        myConnectionInfo.getPublicPort());
             }
         }
         return success;
+    }
+
+    /**
+     * Refresh the connection - re-STUN and update sync files.
+     * Can be called manually or automatically.
+     */
+    public void refreshConnection() {
+        if (!running)
+            return;
+
+        executor.submit(() -> {
+            try {
+                status("Refreshing connection...");
+
+                // Re-do STUN to get fresh public address
+                StunClient.StunResult stun = StunClient.discover(5000);
+                if (stun != null) {
+                    // Update our connection info
+                    myConnectionInfo = new ConnectionInfo(
+                            myPeerId,
+                            stun.publicIp,
+                            stun.publicPort,
+                            myConnectionInfo.getLocalIp(),
+                            myConnectionInfo.getLocalPort());
+
+                    log.info("Re-STUN complete: {}:{}", stun.publicIp, stun.publicPort);
+                    status("Refreshed: " + stun.publicIp + ":" + stun.publicPort);
+
+                    // Update shared folder file
+                    if (sharedFolderSync != null && sharedFolderSync.isActive()) {
+                        sharedFolderSync.updateMyInfo(
+                                getConnectionCode(),
+                                stun.publicIp,
+                                stun.publicPort);
+                    }
+
+                    // Re-punch to all connected peers
+                    for (String peerId : savedPeers.keySet()) {
+                        connectToPeer(peerId);
+                    }
+
+                } else {
+                    log.warn("Re-STUN failed");
+                    status("Refresh failed - STUN error");
+                }
+
+            } catch (Exception e) {
+                log.error("Refresh connection error", e);
+                status("Refresh error: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Force a manual refresh (for UI button).
+     */
+    public void forceRefresh() {
+        log.info("Manual refresh triggered");
+        refreshConnection();
+        if (sharedFolderSync != null) {
+            sharedFolderSync.forceRefresh();
+        }
     }
 
     /**
@@ -259,8 +341,11 @@ public class NetworkManager {
             status("Network started!");
 
             // If shared folder sync is configured, update our info
-            if (sharedFolderSync != null) {
-                sharedFolderSync.updateMyInfo(getConnectionCode());
+            if (sharedFolderSync != null && sharedFolderSync.isActive()) {
+                sharedFolderSync.updateMyInfo(
+                        getConnectionCode(),
+                        publicIp,
+                        publicPort);
             }
 
             return true;

@@ -56,8 +56,13 @@
                                    HBox.hgrow="ALWAYS" styleClass="text-field"/>
                         <Button fx:id="browseFolderBtn" text="📁" onAction="#onBrowseFolder"
                                 style="-fx-background-color: #3a3a3c; -fx-text-fill: white; -fx-padding: 8 12;"/>
+                        <Button fx:id="refreshBtn" text="🔄" onAction="#onManualRefresh"
+                                style="-fx-background-color: #3a3a3c; -fx-text-fill: white; -fx-padding: 8 12;"/>
                     </HBox>
-                    <Label text="Optional: Google Drive folder for auto-reconnect" styleClass="description-label"/>
+                    <HBox spacing="8" alignment="CENTER_LEFT">
+                        <Label fx:id="syncStatusLabel" text="Not syncing" 
+                               style="-fx-text-fill: #636366; -fx-font-size: 11px;"/>
+                    </HBox>
                 </VBox>
 
                 <Region VBox.vgrow="ALWAYS"/>

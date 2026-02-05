@@ -70,6 +70,10 @@ public class MainController implements Initializable {
     private TextField sharedFolderField;
     @FXML
     private Button browseFolderBtn;
+    @FXML
+    private Button refreshBtn;
+    @FXML
+    private Label syncStatusLabel;
 
     // Peers
     @FXML
@@ -261,7 +265,35 @@ public class MainController implements Initializable {
             // Enable sync immediately if network is running
             if (networkManager.getMyConnectionInfo() != null) {
                 networkManager.enableSharedFolderSync(selected.getAbsolutePath());
+                updateSyncStatus("Syncing to: " + selected.getName());
+            } else {
+                updateSyncStatus("Will sync when network starts");
             }
+        }
+    }
+
+    @FXML
+    private void onManualRefresh() {
+        if (networkManager.getMyConnectionInfo() != null) {
+            updateSyncStatus("Refreshing...");
+            networkManager.forceRefresh();
+
+            // Reset status after a delay
+            new Thread(() -> {
+                try {
+                    Thread.sleep(2000);
+                } catch (InterruptedException ignored) {
+                }
+                Platform.runLater(() -> updateSyncStatus("Sync active"));
+            }).start();
+        } else {
+            updateSyncStatus("Start network first");
+        }
+    }
+
+    private void updateSyncStatus(String status) {
+        if (syncStatusLabel != null) {
+            Platform.runLater(() -> syncStatusLabel.setText(status));
         }
     }
 
