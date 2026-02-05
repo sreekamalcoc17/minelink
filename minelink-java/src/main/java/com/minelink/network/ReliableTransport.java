@@ -230,6 +230,38 @@ public class ReliableTransport {
         return peers;
     }
 
+    /**
+     * Send punch packets to a peer to help establish connection.
+     * Called from background thread for continuous punching.
+     */
+    public void sendPunchPackets(String peerId) {
+        Peer peer = peers.get(peerId);
+        if (peer == null) {
+            return;
+        }
+
+        Packet punchPacket = Packet.punch(myPeerId);
+        byte[] punchData = punchPacket.encode();
+
+        // Send to both public and local addresses
+        sendRaw(punchData, peer.getPublicAddress());
+        if (peer.getLocalAddress() != null) {
+            sendRaw(punchData, peer.getLocalAddress());
+        }
+
+        // Also try nearby ports for symmetric NAT
+        String publicIp = peer.getPublicAddress().getAddress().getHostAddress();
+        int basePort = peer.getPublicAddress().getPort();
+        for (int delta = -5; delta <= 5; delta++) {
+            if (delta == 0)
+                continue;
+            int port = basePort + delta;
+            if (port > 1024 && port < 65536) {
+                sendRaw(punchData, new InetSocketAddress(publicIp, port));
+            }
+        }
+    }
+
     // Callbacks
     public void setOnDataReceived(BiConsumer<String, byte[]> callback) {
         this.onDataReceived = callback;
