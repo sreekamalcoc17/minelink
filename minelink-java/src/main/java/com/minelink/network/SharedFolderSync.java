@@ -33,11 +33,11 @@ public class SharedFolderSync {
     private static final Logger log = LoggerFactory.getLogger(SharedFolderSync.class);
     private static final ObjectMapper mapper = new ObjectMapper();
 
-    // Timing constants - AGGRESSIVE for Double NAT
-    private static final int SYNC_INTERVAL_MS = 2000; // Check for peer files every 2s (near-instant)
-    private static final int REFRESH_INTERVAL_MS = 15000; // Re-STUN every 15s (fast NAT recovery)
-    private static final int STALE_THRESHOLD_MS = 30000; // Ignore files older than 30 seconds
-    private static final int DELETE_THRESHOLD_MS = 120000; // Delete files older than 2 minutes
+    // Timing constants
+    private static final int SYNC_INTERVAL_MS = 3000; // Check for peer files every 3s
+    private static final int REFRESH_INTERVAL_MS = 60000; // Re-STUN every 60s (was 15s - too aggressive)
+    private static final int STALE_THRESHOLD_MS = 90000; // Ignore files older than 90 seconds
+    private static final int DELETE_THRESHOLD_MS = 180000; // Delete files older than 3 minutes
 
     private static final int FILE_VERSION = 2;
 
