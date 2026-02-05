@@ -52,17 +52,15 @@
                 <VBox spacing="10">
                     <Label text="Shared Folder (Auto-Sync)" styleClass="section-label"/>
                     <HBox spacing="8" alignment="CENTER_LEFT">
-                        <TextField fx:id="sharedFolderField" promptText="Path to shared folder..." 
+                        <TextField fx:id="sharedFolderField" promptText="Select Google Drive folder..." 
                                    HBox.hgrow="ALWAYS" styleClass="text-field"/>
-                        <Button fx:id="browseFolderBtn" text="📁" onAction="#onBrowseFolder"
-                                style="-fx-background-color: #3a3a3c; -fx-text-fill: white; -fx-padding: 8 12;"/>
-                        <Button fx:id="refreshBtn" text="🔄" onAction="#onManualRefresh"
-                                style="-fx-background-color: #3a3a3c; -fx-text-fill: white; -fx-padding: 8 12;"/>
+                        <Button fx:id="browseFolderBtn" text="Browse" onAction="#onBrowseFolder"
+                                styleClass="secondary-button"/>
+                        <Button fx:id="refreshBtn" text="Refresh" onAction="#onManualRefresh"
+                                style="-fx-background-color: #0a84ff; -fx-text-fill: white; -fx-background-radius: 8; -fx-padding: 8 16; -fx-font-weight: bold;"/>
                     </HBox>
-                    <HBox spacing="8" alignment="CENTER_LEFT">
-                        <Label fx:id="syncStatusLabel" text="Not syncing" 
-                               style="-fx-text-fill: #636366; -fx-font-size: 11px;"/>
-                    </HBox>
+                    <Label fx:id="syncStatusLabel" text="Not syncing" 
+                           style="-fx-text-fill: #30d158; -fx-font-size: 11px; -fx-font-weight: 600;"/>
                 </VBox>
 
                 <Region VBox.vgrow="ALWAYS"/>
