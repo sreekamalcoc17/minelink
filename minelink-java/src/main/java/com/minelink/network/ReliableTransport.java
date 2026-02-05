@@ -154,8 +154,9 @@ public class ReliableTransport {
 
     /**
      * Perform UDP hole punching to establish connection.
-     * Tries multiple addresses: localhost (for same machine), local IP (same
-     * network), public IP
+     * Uses BIRTHDAY ATTACK for Symmetric NAT:
+     * - Both sides send to many ports simultaneously
+     * - Probability of matching increases with port range
      * 
      * @return true if connection established
      */
@@ -166,68 +167,68 @@ public class ReliableTransport {
             return false;
         }
 
-        log.info("Starting hole punch to {}", peerId);
+        log.info("Starting hole punch to {} (birthday attack mode)", peerId);
 
         Packet punchPacket = Packet.punch(myPeerId);
+        byte[] punchData = punchPacket.encode();
 
-        // Build list of addresses to try (including port prediction for symmetric NAT)
+        // Build list of addresses to try
         java.util.List<InetSocketAddress> addressesToTry = new java.util.ArrayList<>();
 
-        // If peer has local address with same public IP as us, they might be on same
-        // network
-        // Try localhost first (same machine testing)
+        // Same machine testing
         int peerPort = peer.getLocalAddress() != null ? peer.getLocalAddress().getPort()
                 : peer.getPublicAddress().getPort();
         addressesToTry.add(new InetSocketAddress("127.0.0.1", peerPort));
 
-        // Try local address
+        // Try local address (same network)
         if (peer.getLocalAddress() != null) {
             addressesToTry.add(peer.getLocalAddress());
         }
 
-        // Try public address
+        // Try public address (exact)
         addressesToTry.add(peer.getPublicAddress());
 
-        // PORT PREDICTION for symmetric NAT
-        // The STUN-discovered port might differ from the actual port used for this
-        // connection
-        // Try nearby ports (+/- 10) to handle sequential port allocation
+        // BIRTHDAY ATTACK for Symmetric NAT
+        // Try a WIDE range of ports around the base
         String publicIp = peer.getPublicAddress().getAddress().getHostAddress();
         int basePort = peer.getPublicAddress().getPort();
-        for (int delta = -10; delta <= 10; delta++) {
+
+        // Try +/- 256 ports (512 total) for birthday attack
+        for (int delta = -256; delta <= 256; delta++) {
             if (delta == 0)
-                continue; // Already added
+                continue;
             int predictedPort = basePort + delta;
-            if (predictedPort > 0 && predictedPort < 65536) {
+            if (predictedPort > 1024 && predictedPort < 65536) {
                 addressesToTry.add(new InetSocketAddress(publicIp, predictedPort));
             }
         }
 
-        log.info("Will try {} addresses for hole punch to {}", addressesToTry.size(), peerId);
+        log.info("Will try {} addresses for hole punch to {} (birthday attack)", addressesToTry.size(), peerId);
 
-        for (int attempt = 1; attempt <= 20; attempt++) { // Increased attempts
-            log.debug("Punch attempt {}/20 to {}", attempt, peerId);
+        // AGGRESSIVE: More attempts, faster sending
+        for (int attempt = 1; attempt <= 30; attempt++) {
+            log.debug("Punch attempt {}/30 to {}", attempt, peerId);
 
-            // Send to all addresses
+            // Send to ALL addresses rapidly
             for (InetSocketAddress addr : addressesToTry) {
-                sendRaw(punchPacket.encode(), addr);
+                sendRaw(punchData, addr);
             }
 
-            // Wait for response
+            // Very short wait between batches
             try {
-                Thread.sleep(300); // Slightly faster
+                Thread.sleep(200);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return false;
             }
 
             if (peer.isConnected()) {
-                log.info("Hole punch successful to {}", peerId);
+                log.info("Hole punch successful to {} after {} attempts!", peerId, attempt);
                 return true;
             }
         }
 
-        log.warn("Hole punch failed to {}", peerId);
+        log.warn("Hole punch failed to {} after birthday attack", peerId);
         return false;
     }
 
