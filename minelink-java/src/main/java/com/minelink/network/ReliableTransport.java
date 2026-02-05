@@ -154,9 +154,7 @@ public class ReliableTransport {
 
     /**
      * Perform UDP hole punching to establish connection.
-     * Uses BIRTHDAY ATTACK for Symmetric NAT:
-     * - Both sides send to many ports simultaneously
-     * - Probability of matching increases with port range
+     * Uses port prediction for Symmetric NAT with throttled sending.
      * 
      * @return true if connection established
      */
@@ -167,7 +165,7 @@ public class ReliableTransport {
             return false;
         }
 
-        log.info("Starting hole punch to {} (birthday attack mode)", peerId);
+        log.info("Starting hole punch to {}", peerId);
 
         Packet punchPacket = Packet.punch(myPeerId);
         byte[] punchData = punchPacket.encode();
@@ -188,13 +186,12 @@ public class ReliableTransport {
         // Try public address (exact)
         addressesToTry.add(peer.getPublicAddress());
 
-        // BIRTHDAY ATTACK for Symmetric NAT
-        // Try a WIDE range of ports around the base
+        // Port prediction for Symmetric NAT
+        // Try +/- 50 ports around the base (100 total) - reasonable range
         String publicIp = peer.getPublicAddress().getAddress().getHostAddress();
         int basePort = peer.getPublicAddress().getPort();
 
-        // Try +/- 256 ports (512 total) for birthday attack
-        for (int delta = -256; delta <= 256; delta++) {
+        for (int delta = -50; delta <= 50; delta++) {
             if (delta == 0)
                 continue;
             int predictedPort = basePort + delta;
@@ -203,20 +200,32 @@ public class ReliableTransport {
             }
         }
 
-        log.info("Will try {} addresses for hole punch to {} (birthday attack)", addressesToTry.size(), peerId);
+        log.info("Will try {} addresses for hole punch to {}", addressesToTry.size(), peerId);
 
-        // AGGRESSIVE: More attempts, faster sending
-        for (int attempt = 1; attempt <= 30; attempt++) {
-            log.debug("Punch attempt {}/30 to {}", attempt, peerId);
+        // Punch with throttling to avoid overwhelming the channel
+        for (int attempt = 1; attempt <= 20; attempt++) {
+            log.debug("Punch attempt {}/20 to {}", attempt, peerId);
 
-            // Send to ALL addresses rapidly
+            // Send to all addresses with small delay to prevent overwhelming
+            int sendCount = 0;
             for (InetSocketAddress addr : addressesToTry) {
                 sendRaw(punchData, addr);
+                sendCount++;
+
+                // Throttle: 1ms pause every 10 packets to prevent buffer overflow
+                if (sendCount % 10 == 0) {
+                    try {
+                        Thread.sleep(1);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return false;
+                    }
+                }
             }
 
-            // Very short wait between batches
+            // Wait for response
             try {
-                Thread.sleep(200);
+                Thread.sleep(300);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return false;
@@ -228,7 +237,7 @@ public class ReliableTransport {
             }
         }
 
-        log.warn("Hole punch failed to {} after birthday attack", peerId);
+        log.warn("Hole punch failed to {}", peerId);
         return false;
     }
 
