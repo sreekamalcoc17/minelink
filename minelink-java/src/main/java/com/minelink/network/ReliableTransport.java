@@ -49,8 +49,8 @@ public class ReliableTransport {
     private ScheduledExecutorService scheduler;
 
     private static final int MAX_RETRIES = 10;
-    private static final int PING_INTERVAL_MS = 5000; // Aggressive: 5s for Double NAT
-    private static final int PEER_TIMEOUT_MS = 30000; // 30s timeout
+    private static final int PING_INTERVAL_MS = 15000;
+    private static final int PEER_TIMEOUT_MS = 60000;
 
     public ReliableTransport(String myPeerId, int localPort) {
         this.myPeerId = myPeerId;
@@ -77,8 +77,7 @@ public class ReliableTransport {
                     }
                 });
 
-        // Bind to IPv4 specifically to avoid IPv6/IPv4 mismatch issues
-        channel = bootstrap.bind("0.0.0.0", localPort).sync().channel();
+        channel = bootstrap.bind(localPort).sync().channel();
 
         InetSocketAddress localAddr = (InetSocketAddress) channel.localAddress();
         log.info("Transport started on {}", localAddr);
@@ -133,28 +132,9 @@ public class ReliableTransport {
     }
 
     /**
-     * Send disconnect packet and remove peer.
-     */
-    public void disconnectPeer(String peerId) {
-        Peer peer = peers.get(peerId);
-        if (peer != null) {
-            log.info("Sending disconnect to {}", peerId);
-            // Send DISCONNECT packet best-effort (multiple times to be safe)
-            Packet pkt = new Packet(PacketType.DISCONNECT, myPeerId, 0, 0, new byte[0]);
-            byte[] data = pkt.encode();
-            for (int i = 0; i < 3; i++) {
-                sendRaw(data, peer.getPublicAddress());
-                if (peer.getLocalAddress() != null) {
-                    sendRaw(data, peer.getLocalAddress());
-                }
-            }
-            removePeer(peerId);
-        }
-    }
-
-    /**
      * Perform UDP hole punching to establish connection.
-     * Uses port prediction for Symmetric NAT with throttled sending.
+     * Tries multiple addresses: localhost (for same machine), local IP (same
+     * network), public IP
      * 
      * @return true if connection established
      */
@@ -168,71 +148,43 @@ public class ReliableTransport {
         log.info("Starting hole punch to {}", peerId);
 
         Packet punchPacket = Packet.punch(myPeerId);
-        byte[] punchData = punchPacket.encode();
 
         // Build list of addresses to try
         java.util.List<InetSocketAddress> addressesToTry = new java.util.ArrayList<>();
 
-        // Same machine testing
+        // If peer has local address with same public IP as us, they might be on same
+        // network
+        // Try localhost first (same machine testing)
         int peerPort = peer.getLocalAddress() != null ? peer.getLocalAddress().getPort()
                 : peer.getPublicAddress().getPort();
         addressesToTry.add(new InetSocketAddress("127.0.0.1", peerPort));
 
-        // Try local address (same network)
+        // Try local address
         if (peer.getLocalAddress() != null) {
             addressesToTry.add(peer.getLocalAddress());
         }
 
-        // Try public address (exact)
+        // Try public address
         addressesToTry.add(peer.getPublicAddress());
 
-        // Port prediction for Symmetric NAT
-        // Try +/- 50 ports around the base (100 total) - reasonable range
-        String publicIp = peer.getPublicAddress().getAddress().getHostAddress();
-        int basePort = peer.getPublicAddress().getPort();
+        for (int attempt = 1; attempt <= 15; attempt++) {
+            log.debug("Punch attempt {}/15 to {}", attempt, peerId);
 
-        for (int delta = -50; delta <= 50; delta++) {
-            if (delta == 0)
-                continue;
-            int predictedPort = basePort + delta;
-            if (predictedPort > 1024 && predictedPort < 65536) {
-                addressesToTry.add(new InetSocketAddress(publicIp, predictedPort));
-            }
-        }
-
-        log.info("Will try {} addresses for hole punch to {}", addressesToTry.size(), peerId);
-
-        // Punch with throttling to avoid overwhelming the channel
-        for (int attempt = 1; attempt <= 20; attempt++) {
-            log.debug("Punch attempt {}/20 to {}", attempt, peerId);
-
-            // Send to all addresses with small delay to prevent overwhelming
-            int sendCount = 0;
+            // Send to all addresses
             for (InetSocketAddress addr : addressesToTry) {
-                sendRaw(punchData, addr);
-                sendCount++;
-
-                // Throttle: 1ms pause every 10 packets to prevent buffer overflow
-                if (sendCount % 10 == 0) {
-                    try {
-                        Thread.sleep(1);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        return false;
-                    }
-                }
+                sendRaw(punchPacket.encode(), addr);
             }
 
             // Wait for response
             try {
-                Thread.sleep(300);
+                Thread.sleep(400);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return false;
             }
 
             if (peer.isConnected()) {
-                log.info("Hole punch successful to {} after {} attempts!", peerId, attempt);
+                log.info("Hole punch successful to {}", peerId);
                 return true;
             }
         }
@@ -241,17 +193,8 @@ public class ReliableTransport {
         return false;
     }
 
-    // Safe chunk size - must fit in UDP datagram without IP fragmentation
-    // Like Python: MAX_PAYLOAD_SIZE = 1200
-    private static final int MAX_CHUNK_SIZE = 1200;
-
-    private static final int WINDOW_SIZE = 1024; // Increased for modded Minecraft (1.2MB buffer)
-
     /**
      * Send data to a peer reliably.
-     * Large data is chunked to avoid UDP fragmentation. Chunks are sent with
-     * sequential sequence numbers - ordered delivery ensures receiver gets them in
-     * order.
      */
     public boolean send(String peerId, byte[] data) {
         Peer peer = peers.get(peerId);
@@ -260,49 +203,16 @@ public class ReliableTransport {
             return false;
         }
 
-        // Chunk data into 1200 byte segments
-        // We use TWO sequence numbers:
-        // 1. Packet Sequence (Global): For ACKs and retransmissions
-        // 2. Data Sequence (Per-Peer, in streamId): For strictly ordered delivery to
-        // the application
+        int seq = sequenceNumber.incrementAndGet();
+        Packet packet = Packet.data(myPeerId, seq, 0, data);
 
-        int offset = 0;
-        while (offset < data.length) {
-            // Flow Control: Block until window opens
-            // Modded Minecraft sends bursts of data, so we must not drop it.
-            // We wait indefinitely for the window to clear.
-            int spinCount = 0;
-            while (pendingAcks.size() >= WINDOW_SIZE) {
-                try {
-                    Thread.sleep(2);
-                    spinCount++;
-                    if (spinCount % 5000 == 0) { // Log every 10s
-                        log.warn("Send buffer full ({} packets), waiting to send to {}...", pendingAcks.size(), peerId);
-                    }
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return false;
-                }
-            }
+        // Store for retransmission
+        pendingAcks.put(seq, new PendingPacket(peerId, packet.encode(), System.currentTimeMillis(), 0));
 
-            int chunkSize = Math.min(MAX_CHUNK_SIZE, data.length - offset);
-            byte[] chunk = new byte[chunkSize];
-            System.arraycopy(data, offset, chunk, 0, chunkSize);
+        // Send
+        sendRaw(packet.encode(), peer.getPublicAddress());
+        log.debug("Sent data seq={} to {} ({} bytes)", seq, peerId, data.length);
 
-            int transportSeq = sequenceNumber.incrementAndGet(); // Global ACK tracking
-            int dataSeq = peer.incrementAndGetSendSeq(); // Per-peer ordered stream
-
-            // Pass dataSeq as streamId
-            Packet packet = Packet.data(myPeerId, transportSeq, dataSeq, chunk);
-            byte[] encoded = packet.encode();
-            pendingAcks.put(transportSeq, new PendingPacket(peerId, encoded, System.currentTimeMillis(), 0));
-            sendRaw(encoded, peer.getPublicAddress());
-
-            offset += chunkSize;
-        }
-
-        log.debug("Sent {} bytes to {} ({} chunks)", data.length, peerId,
-                (data.length + MAX_CHUNK_SIZE - 1) / MAX_CHUNK_SIZE);
         return true;
     }
 
@@ -318,47 +228,6 @@ public class ReliableTransport {
      */
     public Map<String, Peer> getPeers() {
         return peers;
-    }
-
-    /**
-     * Send punch packets to a peer to help establish connection.
-     * Called from background thread for continuous punching.
-     */
-    public void sendPunchPackets(String peerId) {
-        Peer peer = peers.get(peerId);
-        if (peer == null || peer.isConnected()) {
-            return;
-        }
-
-        Packet punchPacket = Packet.punch(myPeerId);
-        byte[] punchData = punchPacket.encode();
-
-        // Send to localhost (same machine)
-        int peerPort = peer.getLocalAddress() != null ? peer.getLocalAddress().getPort()
-                : peer.getPublicAddress().getPort();
-        sendRaw(punchData, new InetSocketAddress("127.0.0.1", peerPort));
-
-        // Send to local address
-        if (peer.getLocalAddress() != null) {
-            sendRaw(punchData, peer.getLocalAddress());
-        }
-
-        // Send to public address
-        sendRaw(punchData, peer.getPublicAddress());
-
-        // PORT PREDICTION for symmetric NAT - also try nearby ports
-        String publicIp = peer.getPublicAddress().getAddress().getHostAddress();
-        int basePort = peer.getPublicAddress().getPort();
-        for (int delta = -5; delta <= 5; delta++) {
-            if (delta == 0)
-                continue;
-            int predictedPort = basePort + delta;
-            if (predictedPort > 0 && predictedPort < 65536) {
-                sendRaw(punchData, new InetSocketAddress(publicIp, predictedPort));
-            }
-        }
-
-        log.debug("Sent punch packets to {} (public: {})", peerId, peer.getPublicAddress());
     }
 
     // Callbacks
@@ -394,45 +263,20 @@ public class ReliableTransport {
             buf.readBytes(data);
 
             InetSocketAddress sender = msg.sender();
-            // Use trace level to avoid flooding logs
-            log.trace(">>> RECV {} bytes from {}", data.length, sender);
             handlePacket(data, sender);
-        }
-
-        @Override
-        public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-            log.error("!!! CHANNEL EXCEPTION: {}", cause.getMessage(), cause);
-        }
-
-        @Override
-        public void channelActive(ChannelHandlerContext ctx) {
-            log.info("=== CHANNEL ACTIVE: ready to receive packets ===");
-        }
-
-        @Override
-        public void channelInactive(ChannelHandlerContext ctx) {
-            log.warn("=== CHANNEL INACTIVE: no longer receiving packets ===");
         }
     }
 
     private void handlePacket(byte[] data, InetSocketAddress sender) {
         Packet packet = Packet.decode(data);
         if (packet == null) {
-            log.trace("Ignoring non-MineLink packet from {}", sender);
             return;
         }
 
         String peerId = packet.getPeerId();
-        PacketType type = packet.getType();
+        Peer peer = peers.get(peerId);
 
-        // Only log non-repetitive packet types at higher levels
-        if (type == PacketType.DATA || type == PacketType.DISCONNECT) {
-            log.debug(">>> PACKET TYPE: {} from peer: {}", type, peerId);
-        } else {
-            log.trace(">>> PACKET TYPE: {} from peer: {}", type, peerId);
-        }
-
-        switch (type) {
+        switch (packet.getType()) {
             case PUNCH -> handlePunch(peerId, sender);
             case PUNCH_ACK -> handlePunchAck(peerId, sender);
             case PING -> handlePing(peerId, packet.getSequenceNumber(), sender);
@@ -450,27 +294,12 @@ public class ReliableTransport {
             return;
         }
 
-        // CRITICAL: For hole punching to work across different NATs,
-        // we need to send packets back to BOTH the sender address AND the peer's public
-        // address.
-        // This opens up the NAT mapping in both directions.
-
-        // Send PUNCH_ACK back to the sender (the address where we received the punch)
+        // Send PUNCH_ACK
         sendRaw(Packet.punchAck(myPeerId).encode(), sender);
-
-        // Also send PUNCH packets back to establish the reverse NAT mapping
-        // This is critical for symmetric NAT traversal
-        sendRaw(Packet.punch(myPeerId).encode(), sender);
-
-        // If we have a different public address for this peer, send there too
-        if (!sender.equals(peer.getPublicAddress())) {
-            sendRaw(Packet.punch(myPeerId).encode(), peer.getPublicAddress());
-            sendRaw(Packet.punchAck(myPeerId).encode(), peer.getPublicAddress());
-        }
 
         if (!peer.isConnected()) {
             peer.setConnected(true);
-            log.info("Connection established with {} (via punch from {})", peerId, sender);
+            log.info("Connection established with {} (via punch)", peerId);
             if (onPeerConnected != null) {
                 onPeerConnected.accept(peerId);
             }
@@ -516,54 +345,16 @@ public class ReliableTransport {
 
     private void handleData(String peerId, Packet packet) {
         Peer peer = peers.get(peerId);
-        if (peer == null)
-            return;
+        if (peer != null) {
+            peer.updateLastSeen();
 
-        peer.updateLastSeen();
-        int transportSeq = packet.getSequenceNumber(); // Global sequence for ACK
-        int dataSeq = packet.getStreamId(); // Per-peer sequence for ordering (was streamId)
-        byte[] payload = packet.getPayload();
+            // Send ACK
+            sendRaw(Packet.ack(myPeerId, packet.getSequenceNumber()).encode(), peer.getPublicAddress());
 
-        // Send ACK immediately for the transport sequence
-        sendRaw(Packet.ack(myPeerId, transportSeq).encode(), peer.getPublicAddress());
-
-        // ORDERED DELIVERY - Using dataSeq (streamId)
-        // Only deliver data when dataSeq matches expected recv_seq
-
-        int expectedSeq = peer.getRecvSeq();
-
-        if (dataSeq < expectedSeq) {
-            // Already received (duplicate), ignore
-            log.debug("Duplicate packet dataSeq={}, expected={}", dataSeq, expectedSeq);
-            return;
-        }
-
-        if (dataSeq > expectedSeq) {
-            // Out of order - buffer it for later
-            peer.getRecvBuffer().put(dataSeq, payload);
-            log.debug("Out-of-order packet dataSeq={}, expected={}, buffered", dataSeq, expectedSeq);
-            return;
-        }
-
-        // dataSeq == expectedSeq - in order, process it
-        deliverData(peerId, payload);
-        peer.incrementRecvSeq();
-
-        // Check buffer for next expected packets (drain in order)
-        while (peer.getRecvBuffer().containsKey(peer.getRecvSeq())) {
-            byte[] buffered = peer.getRecvBuffer().remove(peer.getRecvSeq());
-            deliverData(peerId, buffered);
-            peer.incrementRecvSeq();
-            log.debug("Delivered buffered packet dataSeq={}", peer.getRecvSeq() - 1);
-        }
-    }
-
-    /**
-     * Deliver data to the application callback.
-     */
-    private void deliverData(String peerId, byte[] data) {
-        if (onDataReceived != null) {
-            onDataReceived.accept(peerId, data);
+            // Deliver to application
+            if (onDataReceived != null) {
+                onDataReceived.accept(peerId, packet.getPayload());
+            }
         }
     }
 
@@ -589,11 +380,6 @@ public class ReliableTransport {
         if (channel != null && channel.isActive()) {
             ByteBuf buf = Unpooled.wrappedBuffer(data);
             channel.writeAndFlush(new DatagramPacket(buf, target));
-            // Use trace level to avoid flooding logs - only visible with
-            // -Dlogback.configurationFile with TRACE level
-            log.trace("<<< SENT {} bytes to {}", data.length, target);
-        } else {
-            log.warn("<<< SEND FAILED - channel not active! target={}", target);
         }
     }
 
@@ -603,18 +389,11 @@ public class ReliableTransport {
             if (peer.isConnected()) {
                 int seq = sequenceNumber.incrementAndGet();
                 Packet ping = Packet.ping(myPeerId, seq);
-                byte[] pingData = ping.encode();
 
                 // Store for RTT calculation
-                pendingAcks.put(-seq, new PendingPacket(entry.getKey(), pingData, System.currentTimeMillis(), 0));
+                pendingAcks.put(-seq, new PendingPacket(entry.getKey(), ping.encode(), System.currentTimeMillis(), 0));
 
-                // Send to PUBLIC address (for Double NAT, this keeps outer NAT alive)
-                sendRaw(pingData, peer.getPublicAddress());
-
-                // Also send to LOCAL address if different (keeps both paths alive)
-                if (peer.getLocalAddress() != null && !peer.getLocalAddress().equals(peer.getPublicAddress())) {
-                    sendRaw(pingData, peer.getLocalAddress());
-                }
+                sendRaw(ping.encode(), peer.getPublicAddress());
             }
         }
     }
@@ -649,24 +428,15 @@ public class ReliableTransport {
             }
 
             double rto = peer.getRto();
-            // Exponential backoff: RTO * 1.5 ^ retries
-            double backoffRto = rto * Math.pow(1.5, pending.retries);
-
-            if (now - pending.sendTime > backoffRto) {
+            if (now - pending.sendTime > rto) {
                 if (pending.retries >= MAX_RETRIES) {
-                    if (pending.retries % 10 == 0) {
-                        log.warn("Packet seq={} to {} is struggling ({} retries), link quality poor? RTO={}",
-                                seq, pending.peerId, pending.retries, backoffRto);
-                    }
-                    // Keep trying, don't drop
-                    pending.retries++;
-                    pending.sendTime = now;
-                    sendRaw(pending.data, peer.getPublicAddress());
+                    log.warn("Max retries reached for seq={}", seq);
+                    pendingAcks.remove(seq);
                 } else {
                     pending.retries++;
                     pending.sendTime = now;
                     sendRaw(pending.data, peer.getPublicAddress());
-                    log.debug("Retransmitting seq={} to {} (attempt {})", seq, pending.peerId, pending.retries);
+                    log.debug("Retransmit seq={} (attempt {})", seq, pending.retries);
                 }
             }
         }
